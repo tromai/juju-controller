@@ -1,7 +1,7 @@
 [project]
 name = "juju-controller"
 version = "0.1.0"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 dependencies = [
     "ops",
     "cosl",
@@ -10,5 +10,35 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "coverage",
-    "flake8",
+    "ruff",
+    "pyright",
+    "codespell",
 ]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 99
+
+[tool.ruff.format]
+quote-style = "single"
+
+[tool.ruff.lint]
+select = ["F","E","W","I001","N","A","CPY","UP","YTT","S","B","SIM","RUF","PERF","D","FA","TC"]
+ignore = ["TC001","TC002","TC003","S101","D105","D107"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D","S101","S105","S106"]
+"lib/*"   = ["D","S101","S105","S106","N","E501","PERF203","RUF012","S603","S108","B904"]
+
+[tool.pyright]
+pythonVersion = "3.10"
+typeCheckingMode = "strict"
+reportPrivateUsage = false
+reportUnnecessaryTypeIgnoreComment = "error"
+
+[tool.coverage.run]
+branch = true
+source = ["src"]
+
+[tool.coverage.report]
+show_missing = true

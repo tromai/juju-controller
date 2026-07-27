@@ -2,30 +2,34 @@
 # Copyright 2021 Canonical Ltd.
 # Licensed under the GPLv3, see LICENSE file for details.
 
-import controlsocket
-import configchangesocket
+"""Juju Controller charm that exposes controller functionality via relations."""
+
 import json
 import logging
 import secrets
 import urllib.parse
-import yaml
-from unixsocket import APIError
+from pathlib import Path
 
-from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
-from charms.tempo_coordinator_k8s.v0.tracing import TracingEndpointRequirer
+import yaml
 from charms.certificate_transfer_interface.v1.certificate_transfer import (
     CertificateTransferRequires,
 )
 from charms.data_platform_libs.v0.s3 import CredentialsChangedEvent, S3Requirer
 from charms.loki_k8s.v1.loki_push_api import LokiPushApiConsumer
+from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
+from charms.tempo_coordinator_k8s.v0.tracing import TracingEndpointRequirer
 import ops
-from pathlib import Path
-from typing import List, Optional, Tuple
+
+import configchangesocket
+import controlsocket
+from unixsocket import APIError
 
 logger = logging.getLogger(__name__)
 
 
 class JujuControllerCharm(ops.CharmBase):
+    """Charm that integrates the Juju controller with various services."""
+
     METRICS_SOCKET_PATH = '/var/lib/juju/control.socket'
     CONFIG_SOCKET_PATH = '/var/lib/juju/configchange.socket'
     DB_BIND_ADDR_KEY = 'db-bind-address'
@@ -38,25 +42,21 @@ class JujuControllerCharm(ops.CharmBase):
         super().__init__(*args)
 
         self.charm_tracing_requirer = TracingEndpointRequirer(
-            self,
-            protocols=["otlp_http", "otlp_grpc"],
-            relation_name='charm-tracing'
+            self, protocols=['otlp_http', 'otlp_grpc'], relation_name='charm-tracing'
         )
         self.charm_certificate_transfer = CertificateTransferRequires(
             self, relationship_name='charm-tracing-ca-cert'
         )
         self.workload_tracing_requirer = TracingEndpointRequirer(
-            self,
-            protocols=["otlp_http", "otlp_grpc"],
-            relation_name='workload-tracing'
+            self, protocols=['otlp_http', 'otlp_grpc'], relation_name='workload-tracing'
         )
         self.workload_certificate_transfer = CertificateTransferRequires(
             self, relationship_name='workload-tracing-ca-cert'
         )
-        self._s3 = S3Requirer(self, "s3-backend")
-        self._loki_consumer = LokiPushApiConsumer(self, "loki-push-api")
+        self._s3 = S3Requirer(self, 's3-backend')
+        self._loki_consumer = LokiPushApiConsumer(self, 'loki-push-api')
         self.loki_certificate_transfer = CertificateTransferRequires(
-            self, relationship_name="loki-push-api-ca-cert"
+            self, relationship_name='loki-push-api-ca-cert'
         )
 
         self._stored.set_default(
@@ -72,9 +72,11 @@ class JujuControllerCharm(ops.CharmBase):
         # TODO (manadart 2024-03-05): Get these at need.
         # No need to instantiate them for every invocation.
         self._control_socket = controlsocket.ControlSocketClient(
-            socket_path=self.METRICS_SOCKET_PATH)
+            socket_path=self.METRICS_SOCKET_PATH
+        )
         self._config_change_socket = configchangesocket.ConfigChangeSocketClient(
-            socket_path=self.CONFIG_SOCKET_PATH)
+            socket_path=self.CONFIG_SOCKET_PATH
+        )
 
         self._observe()
 
@@ -91,34 +93,40 @@ class JujuControllerCharm(ops.CharmBase):
         # the controller API and display the correct information about the
         # controller.
         self.framework.observe(
-            self.on.dashboard_relation_joined, self._on_dashboard_relation_joined)
-        self.framework.observe(
-            self.on.website_relation_joined, self._on_website_relation_joined)
+            self.on.dashboard_relation_joined, self._on_dashboard_relation_joined
+        )
+        self.framework.observe(self.on.website_relation_joined, self._on_website_relation_joined)
 
         # Metrics endpoint relation events are observed to manage users for the
         # metrics endpoint, and to maintain the correct scrape configuration for
         # the controller API in the Prometheus scrape config provided to related
         # Prometheus charms.
         self.framework.observe(
-            self.on.metrics_endpoint_relation_created, self._on_metrics_endpoint_relation_created)
+            self.on.metrics_endpoint_relation_created, self._on_metrics_endpoint_relation_created
+        )
         self.framework.observe(
-            self.on.metrics_endpoint_relation_broken, self._on_metrics_endpoint_relation_broken)
+            self.on.metrics_endpoint_relation_broken, self._on_metrics_endpoint_relation_broken
+        )
 
         # DB cluster relation events are observed to maintain the current set of
         # bind addresses for the controller cluster in the charm's stored state,
         # and to apply it to the charm configuration when it changes.
         self.framework.observe(
-            self.on.dbcluster_relation_changed, self._on_dbcluster_relation_changed)
+            self.on.dbcluster_relation_changed, self._on_dbcluster_relation_changed
+        )
         self.framework.observe(
-            self.on.dbcluster_relation_departed, self._on_dbcluster_relation_departed)
+            self.on.dbcluster_relation_departed, self._on_dbcluster_relation_departed
+        )
 
         # Tracing relation events are observed to maintain the current tracing
         # endpoint information in the charm's stored state, and to apply it to
         # the charm configuration when it changes.
         self.framework.observe(
-            self.charm_tracing_requirer.on.endpoint_changed, self._on_tracing_relation_changed)
+            self.charm_tracing_requirer.on.endpoint_changed, self._on_tracing_relation_changed
+        )
         self.framework.observe(
-            self.charm_tracing_requirer.on.endpoint_removed, self._on_tracing_relation_removed)
+            self.charm_tracing_requirer.on.endpoint_removed, self._on_tracing_relation_removed
+        )
         self.framework.observe(
             self.charm_certificate_transfer.on.certificate_set_updated,
             self._on_receive_ca_cert_updated,
@@ -146,21 +154,20 @@ class JujuControllerCharm(ops.CharmBase):
         # S3 credential events are observed to maintain the current S3
         # credentials in the charm's stored state, and to apply them via the
         # control socket when they change.
-        self.framework.observe(
-            self._s3.on.credentials_changed, self._on_s3_credentials_changed)
-        self.framework.observe(
-            self._s3.on.credentials_gone,
-            self._on_s3_credentials_gone)
+        self.framework.observe(self._s3.on.credentials_changed, self._on_s3_credentials_changed)
+        self.framework.observe(self._s3.on.credentials_gone, self._on_s3_credentials_gone)
 
         # Loki Push API events are observed to maintain the correct controller
         # API port in the config file, which is needed for Loki to push logs to
         # the correct place.
         self.framework.observe(
             self._loki_consumer.on.loki_push_api_endpoint_joined,
-            self._on_loki_push_api_endpoint_joined)
+            self._on_loki_push_api_endpoint_joined,
+        )
         self.framework.observe(
             self._loki_consumer.on.loki_push_api_endpoint_departed,
-            self._on_loki_push_api_endpoint_departed)
+            self._on_loki_push_api_endpoint_departed,
+        )
         self.framework.observe(
             self.loki_certificate_transfer.on.certificate_set_updated,
             self._on_receive_loki_ca_cert_updated,
@@ -188,39 +195,43 @@ class JujuControllerCharm(ops.CharmBase):
         # state. This avoids replaying stale credentials if this unit becomes
         # leader before processing delayed relation events.
         s3_connection_info = self._s3.get_s3_connection_info()
-        access_key = s3_connection_info.get("access-key")
-        secret_key = s3_connection_info.get("secret-key")
+        access_key = s3_connection_info.get('access-key')
+        secret_key = s3_connection_info.get('secret-key')
         if not access_key or not secret_key:
             return
 
         credentials = {
-            "access_key": access_key,
-            "secret_key": secret_key,
-            "endpoint": s3_connection_info.get("endpoint"),
+            'access_key': access_key,
+            'secret_key': secret_key,
+            'endpoint': s3_connection_info.get('endpoint'),
         }
         self._stored.s3_status_pending = True
 
         try:
-            logger.info("reapplying S3 credentials after leadership change")
+            logger.info('reapplying S3 credentials after leadership change')
             self._control_socket.add_s3_credentials(credentials)
             self._stored.s3_status_error = None
         except Exception as exc:  # pragma: no cover - defensive
-            logger.error("failed to reapply S3 credentials after leadership change: %s", exc)
+            logger.error('failed to reapply S3 credentials after leadership change: %s', exc)
             self._stored.s3_status_pending = False
-            self._stored.s3_status_error = "failed to reapply s3 credentials"
+            self._stored.s3_status_error = 'failed to reapply s3 credentials'
 
     def _on_collect_status(self, event: ops.CollectStatusEvent):
         has_blocking_status = False
         if len(self._stored.last_bind_addresses) > 1:
-            event.add_status(ops.BlockedStatus(
-                'multiple possible DB bind addresses; set a suitable dbcluster network binding'))
+            event.add_status(
+                ops.BlockedStatus(
+                    'multiple possible DB bind addresses; set a suitable dbcluster network binding'
+                )
+            )
             has_blocking_status = True
 
         try:
             self.api_port()
-        except AgentConfException as e:
-            event.add_status(ops.BlockedStatus(
-                f'cannot read controller API port from agent configuration: {e}'))
+        except AgentConfError as e:
+            event.add_status(
+                ops.BlockedStatus(f'cannot read controller API port from agent configuration: {e}')
+            )
             has_blocking_status = True
 
         if self._stored.tracing_status_error:
@@ -241,7 +252,7 @@ class JujuControllerCharm(ops.CharmBase):
 
         if self._stored.s3_status_pending:
             if not has_blocking_status:
-                event.add_status(ops.MaintenanceStatus("applying s3 credentials"))
+                event.add_status(ops.MaintenanceStatus('applying s3 credentials'))
             self._stored.s3_status_pending = False
             return
 
@@ -256,20 +267,22 @@ class JujuControllerCharm(ops.CharmBase):
     def _on_dashboard_relation_joined(self, event):
         logger.info('got a new dashboard relation: %r', event)
         if self.unit.is_leader():
-            event.relation.data[self.app].update({
-                'controller-url': self.config['controller-url'],
-                'identity-provider-url': self.config['identity-provider-url'],
-                'is-juju': str(self.config['is-juju']),
-            })
+            event.relation.data[self.app].update(
+                {
+                    'controller-url': self.config['controller-url'],
+                    'identity-provider-url': self.config['identity-provider-url'],
+                    'is-juju': str(self.config['is-juju']),
+                }
+            )
         # TODO: do we need to poke something on the controller so that the `juju
         # dashboard` command will work?
 
     def _on_website_relation_joined(self, event):
         """Connect a website relation."""
-        logger.info("got a new website relation: %r", event)
+        logger.info('got a new website relation: %r', event)
         port = self.api_port()
         if port is None:
-            logger.error("machine does not appear to be a controller")
+            logger.error('machine does not appear to be a controller')
             self.unit.status = ops.BlockedStatus('machine does not appear to be a controller')
             return
 
@@ -278,11 +291,9 @@ class JujuControllerCharm(ops.CharmBase):
         if binding:
             address = binding.network.ingress_address
             if self.unit.is_leader():
-                event.relation.data[self.unit].update({
-                    'hostname': str(address),
-                    'private-address': str(address),
-                    'port': str(port)
-                })
+                event.relation.data[self.unit].update(
+                    {'hostname': str(address), 'private-address': str(address), 'port': str(port)}
+                )
 
     def _on_metrics_endpoint_relation_created(self, event: ops.RelationJoinedEvent):
         username = metrics_username(event.relation)
@@ -292,31 +303,30 @@ class JujuControllerCharm(ops.CharmBase):
         # Set up Prometheus scrape config
         try:
             api_port = self.api_port()
-        except AgentConfException as e:
+        except AgentConfError as e:
             self.unit.status = ops.BlockedStatus(
-                f"can't read controller API port from agent.conf: {e}")
+                f"can't read controller API port from agent.conf: {e}"
+            )
             logger.error('cannot read controller API port from agent configuration: %s', e)
             return
 
         metrics_endpoint = MetricsEndpointProvider(
             self,
-            jobs=[{
-                "metrics_path": "/introspection/metrics",
-                "scheme": "https",
-                "static_configs": [{
-                    "targets": [
-                        f'*:{api_port}'
-                    ]
-                }],
-                "basic_auth": {
-                    "username": f'user-{username}',
-                    "password": password,
-                },
-                "tls_config": {
-                    "ca_file": self.ca_cert(),
-                    "server_name": "juju-apiserver",
-                },
-            }],
+            jobs=[
+                {
+                    'metrics_path': '/introspection/metrics',
+                    'scheme': 'https',
+                    'static_configs': [{'targets': [f'*:{api_port}']}],
+                    'basic_auth': {
+                        'username': f'user-{username}',
+                        'password': password,
+                    },
+                    'tls_config': {
+                        'ca_file': self.ca_cert(),
+                        'server_name': 'juju-apiserver',
+                    },
+                }
+            ],
         )
         metrics_endpoint.set_scrape_job_spec()
 
@@ -337,14 +347,14 @@ class JujuControllerCharm(ops.CharmBase):
             return
 
         endpoints = {
-            "otlp_grpc": self.charm_tracing_requirer.get_endpoint("otlp_grpc", event.relation),
-            "otlp_http": self.charm_tracing_requirer.get_endpoint("otlp_http", event.relation),
+            'otlp_grpc': self.charm_tracing_requirer.get_endpoint('otlp_grpc', event.relation),
+            'otlp_http': self.charm_tracing_requirer.get_endpoint('otlp_http', event.relation),
         }
-        logger.info("tracing endpoints updated: %s", endpoints)
+        logger.info('tracing endpoints updated: %s', endpoints)
         self._update_charm_tracing_config()
 
     def _on_tracing_relation_removed(self, event):
-        logger.info("tracing endpoints cleared")
+        logger.info('tracing endpoints cleared')
         self._update_charm_tracing_config()
 
     def _on_receive_ca_cert_updated(self, event):
@@ -352,11 +362,11 @@ class JujuControllerCharm(ops.CharmBase):
         if not ca_list:
             return
 
-        logger.info("CA certificate updated from relation id %s", event.relation_id)
+        logger.info('CA certificate updated from relation id %s', event.relation_id)
         self._update_charm_tracing_config()
 
     def _on_receive_ca_cert_removed(self, event):
-        logger.info("CA certificate removed from relation id %s", event.relation_id)
+        logger.info('CA certificate removed from relation id %s', event.relation_id)
         self._update_charm_tracing_config()
 
     def _on_workload_tracing_relation_changed(self, event):
@@ -364,18 +374,14 @@ class JujuControllerCharm(ops.CharmBase):
             return
 
         endpoints = {
-            "otlp_grpc": self.workload_tracing_requirer.get_endpoint(
-                "otlp_grpc", event.relation
-            ),
-            "otlp_http": self.workload_tracing_requirer.get_endpoint(
-                "otlp_http", event.relation
-            ),
+            'otlp_grpc': self.workload_tracing_requirer.get_endpoint('otlp_grpc', event.relation),
+            'otlp_http': self.workload_tracing_requirer.get_endpoint('otlp_http', event.relation),
         }
-        logger.info("workload tracing endpoints updated: %s", endpoints)
+        logger.info('workload tracing endpoints updated: %s', endpoints)
         self._update_workload_tracing_config(allow_endpoint_only=True)
 
     def _on_workload_tracing_relation_removed(self, event):
-        logger.info("workload tracing endpoints cleared")
+        logger.info('workload tracing endpoints cleared')
         self._update_workload_tracing_config(allow_endpoint_only=True)
 
     def _on_receive_workload_ca_cert_updated(self, event):
@@ -383,23 +389,23 @@ class JujuControllerCharm(ops.CharmBase):
         if not ca_list:
             return
 
-        logger.info("workload CA certificate updated from relation id %s", event.relation_id)
+        logger.info('workload CA certificate updated from relation id %s', event.relation_id)
         self._update_workload_tracing_config(allow_endpoint_only=True)
 
     def _on_receive_workload_ca_cert_removed(self, event):
-        logger.info("workload CA certificate removed from relation id %s", event.relation_id)
+        logger.info('workload CA certificate removed from relation id %s', event.relation_id)
         self._update_workload_tracing_config(allow_endpoint_only=True)
 
     def _update_bind_addresses(self, relation):
         """Maintain our own bind address in relation data.
+
         If we are the leader, aggregate the bind addresses for all the peers,
         and ensure the result is set in the application data bag.
         If the aggregate addresses have changed, rewrite the config file.
         """
-
         try:
             ip = self._set_db_bind_address(relation)
-        except DBBindAddressException as e:
+        except DBBindAddressError as e:
             logger.error(e)
             ip = None
 
@@ -415,7 +421,8 @@ class JujuControllerCharm(ops.CharmBase):
                     all_bind_addresses[agent_id] = unit_data[self.DB_BIND_ADDR_KEY]
 
             relation.data[self.app][self.ALL_BIND_ADDRS_KEY] = json.dumps(
-                all_bind_addresses, sort_keys=True)
+                all_bind_addresses, sort_keys=True
+            )
             self._update_config_file(all_bind_addresses)
         else:
             app_data = relation.data[self.app]
@@ -427,8 +434,10 @@ class JujuControllerCharm(ops.CharmBase):
             self._update_config_file(all_bind_addresses)
 
     def _set_db_bind_address(self, relation):
-        """Set a db bind address for Dqlite in relation data, if we can
-        determine a unique one from the relation's bound space.
+        """Set a db bind address for Dqlite in relation data.
+
+        Set it if we can determine a unique one from the relation's bound
+        space.
 
         Returns the db bind address.
         """
@@ -437,14 +446,14 @@ class JujuControllerCharm(ops.CharmBase):
         ip = ips[0]
 
         if len(ips) > 1:
-            raise DBBindAddressException(
-                'multiple possible DB bind addresses;set a suitable cluster network binding')
+            raise DBBindAddressError(
+                'multiple possible DB bind addresses;set a suitable cluster network binding'
+            )
 
         logger.info('setting DB bind address: %s', ip)
-        relation.data[self.unit].update({
-            self.DB_BIND_ADDR_KEY: ip,
-            self.AGENT_ID_KEY: self._controller_agent_id()
-        })
+        relation.data[self.unit].update(
+            {self.DB_BIND_ADDR_KEY: ip, self.AGENT_ID_KEY: self._controller_agent_id()}
+        )
         return ip
 
     def _update_config_file(self, bind_addresses):
@@ -468,13 +477,13 @@ class JujuControllerCharm(ops.CharmBase):
         """Return the port on which the controller API server is listening."""
         api_addresses = self._agent_conf('apiaddresses')
         if not api_addresses:
-            raise AgentConfException("agent.conf key 'apiaddresses' missing")
-        if not isinstance(api_addresses, List):
-            raise AgentConfException("agent.conf key 'apiaddresses' is not a list")
+            raise AgentConfError("agent.conf key 'apiaddresses' missing")
+        if not isinstance(api_addresses, list):
+            raise AgentConfError("agent.conf key 'apiaddresses' is not a list")
 
         parsed_url = urllib.parse.urlsplit('//' + api_addresses[0])
         if not parsed_url.port:
-            raise AgentConfException('API address does not include port')
+            raise AgentConfError('API address does not include port')
         return parsed_url.port
 
     def ca_cert(self) -> str:
@@ -491,7 +500,9 @@ class JujuControllerCharm(ops.CharmBase):
             return agent_conf.get(key)
 
     def _controller_config_path(self) -> str:
-        """Interrogate the running controller jujud service to determine
+        """Return the path to the controller configuration file.
+
+        Interrogate the running controller jujud service to determine
         the local controller ID, then use it to construct a config path.
         """
         controller_id = self._controller_agent_id()
@@ -505,34 +516,32 @@ class JujuControllerCharm(ops.CharmBase):
         self._config_change_socket.reload_config()
 
     @staticmethod
-    def _endpoint_requires_ca_cert(endpoint: Optional[str]) -> bool:
-        return bool(endpoint) and endpoint.startswith(("https://", "grpcs://"))
+    def _endpoint_requires_ca_cert(endpoint: str | None) -> bool:
+        return bool(endpoint) and endpoint.startswith(('https://', 'grpcs://'))
 
     def _current_tracing_config(
         self,
         tracing_requirer: TracingEndpointRequirer,
         certificate_transfer: CertificateTransferRequires,
-    ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
-        grpc_endpoint: Optional[str] = None
-        http_endpoint: Optional[str] = None
+    ) -> tuple[str | None, str | None, str | None]:
+        grpc_endpoint: str | None = None
+        http_endpoint: str | None = None
 
         tracing_data = tracing_requirer.get_all_endpoints()
         if tracing_data:
             for receiver in tracing_data.receivers:
-                if receiver.protocol.name == "otlp_grpc" and grpc_endpoint is None:
+                if receiver.protocol.name == 'otlp_grpc' and grpc_endpoint is None:
                     grpc_endpoint = receiver.url
-                if receiver.protocol.name == "otlp_http" and http_endpoint is None:
+                if receiver.protocol.name == 'otlp_http' and http_endpoint is None:
                     http_endpoint = receiver.url
 
         return grpc_endpoint, http_endpoint, self._current_ca_cert(certificate_transfer)
 
-    def _current_ca_cert(
-        self, certificate_transfer: CertificateTransferRequires
-    ) -> Optional[str]:
+    def _current_ca_cert(self, certificate_transfer: CertificateTransferRequires) -> str | None:
         certificates = certificate_transfer.get_all_certificates()
-        return "\n".join(sorted(certificates)) if certificates else None
+        return '\n'.join(sorted(certificates)) if certificates else None
 
-    def _current_charm_tracing_config(self) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    def _current_charm_tracing_config(self) -> tuple[str | None, str | None, str | None]:
         return self._current_tracing_config(
             tracing_requirer=self.charm_tracing_requirer,
             certificate_transfer=self.charm_certificate_transfer,
@@ -540,7 +549,7 @@ class JujuControllerCharm(ops.CharmBase):
 
     def _current_workload_tracing_config(
         self,
-    ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    ) -> tuple[str | None, str | None, str | None]:
         return self._current_tracing_config(
             tracing_requirer=self.workload_tracing_requirer,
             certificate_transfer=self.workload_certificate_transfer,
@@ -548,18 +557,16 @@ class JujuControllerCharm(ops.CharmBase):
 
     def _validate_open_telemetry_sample_ratio(self, sample_ratio: float):
         if sample_ratio < 0 or sample_ratio > 1:
-            raise ValueError(
-                "invalid workload-tracing-sample-ratio: must be between 0 and 1"
-            )
+            raise ValueError('invalid workload-tracing-sample-ratio: must be between 0 and 1')
 
-    def _current_open_telemetry_config(self) -> Tuple[bool, float, str, bool]:
-        sample_ratio = float(self.config["workload-tracing-sample-ratio"])
+    def _current_open_telemetry_config(self) -> tuple[bool, float, str, bool]:
+        sample_ratio = float(self.config['workload-tracing-sample-ratio'])
         self._validate_open_telemetry_sample_ratio(sample_ratio)
         return (
-            self.config["workload-tracing-stack-traces"],
+            self.config['workload-tracing-stack-traces'],
             sample_ratio,
-            self.config["workload-tracing-tail-sampling-threshold"],
-            self.config["workload-tracing-insecure-skip-verify"],
+            self.config['workload-tracing-tail-sampling-threshold'],
+            self.config['workload-tracing-insecure-skip-verify'],
         )
 
     def _update_charm_tracing_config(self):
@@ -572,10 +579,11 @@ class JujuControllerCharm(ops.CharmBase):
             any(
                 self._endpoint_requires_ca_cert(endpoint)
                 for endpoint in (grpc_endpoint, http_endpoint)
-            ) and not ca_cert
+            )
+            and not ca_cert
         ):
             self._stored.tracing_status_error = (
-                "charm tracing endpoint requires a CA cert, but none is available"
+                'charm tracing endpoint requires a CA cert, but none is available'
             )
             self.unit.status = ops.BlockedStatus(self._stored.tracing_status_error)
             return
@@ -588,8 +596,8 @@ class JujuControllerCharm(ops.CharmBase):
             )
             self._stored.tracing_status_error = None
         except Exception as exc:
-            logger.error("failed to set charm tracing config: %s", exc)
-            self._stored.tracing_status_error = "failed to set charm tracing config"
+            logger.error('failed to set charm tracing config: %s', exc)
+            self._stored.tracing_status_error = 'failed to set charm tracing config'
 
     def _update_workload_tracing_config(self, allow_endpoint_only=False):
         """Update workload tracing configuration with current endpoint and CA cert information."""
@@ -608,13 +616,13 @@ class JujuControllerCharm(ops.CharmBase):
                 insecure_skip_verify,
             ) = self._current_open_telemetry_config()
             open_telemetry_config = {
-                "stack_traces": open_telemetry_stack_traces,
-                "sample_ratio": open_telemetry_sample_ratio,
-                "tail_sampling_threshold": open_telemetry_tail_sampling_threshold,
-                "insecure_skip_verify": insecure_skip_verify,
+                'stack_traces': open_telemetry_stack_traces,
+                'sample_ratio': open_telemetry_sample_ratio,
+                'tail_sampling_threshold': open_telemetry_tail_sampling_threshold,
+                'insecure_skip_verify': insecure_skip_verify,
             }
         except ValueError as exc:
-            logger.error("%s", exc)
+            logger.error('%s', exc)
             self._stored.workload_tracing_status_error = str(exc)
             had_invalid_open_telemetry_config = True
             if not allow_endpoint_only:
@@ -624,11 +632,13 @@ class JujuControllerCharm(ops.CharmBase):
             any(
                 self._endpoint_requires_ca_cert(endpoint)
                 for endpoint in (grpc_endpoint, http_endpoint)
-            ) and not ca_cert and not insecure_skip_verify
+            )
+            and not ca_cert
+            and not insecure_skip_verify
         ):
             if not had_invalid_open_telemetry_config:
                 self._stored.workload_tracing_status_error = (
-                    "workload tracing endpoint requires a CA cert, but none is available"
+                    'workload tracing endpoint requires a CA cert, but none is available'
                 )
             self.unit.status = ops.BlockedStatus(self._stored.workload_tracing_status_error)
             return
@@ -643,8 +653,8 @@ class JujuControllerCharm(ops.CharmBase):
             if open_telemetry_config:
                 self._stored.workload_tracing_status_error = None
         except Exception as exc:
-            logger.error("failed to set workload tracing config: %s", exc)
-            self._stored.workload_tracing_status_error = "failed to set workload tracing config"
+            logger.error('failed to set workload tracing config: %s', exc)
+            self._stored.workload_tracing_status_error = 'failed to set workload tracing config'
 
     def _on_s3_credentials_changed(self, event: CredentialsChangedEvent):
         """Handle new or updated S3 credentials."""
@@ -662,13 +672,13 @@ class JujuControllerCharm(ops.CharmBase):
 
         self._stored.s3_status_pending = True
         try:
-            logger.info("applying new S3 credentials")
+            logger.info('applying new S3 credentials')
             self._control_socket.add_s3_credentials(credentials)
             self._stored.s3_status_error = None
         except Exception as exc:  # pragma: no cover - defensive
-            logger.error("failed to apply S3 credentials: %s", exc)
+            logger.error('failed to apply S3 credentials: %s', exc)
             self._stored.s3_status_pending = False
-            self._stored.s3_status_error = "failed to apply s3 credentials"
+            self._stored.s3_status_error = 'failed to apply s3 credentials'
 
     def _on_s3_credentials_gone(self, _event):
         """Handle removal of S3 credentials."""
@@ -679,12 +689,12 @@ class JujuControllerCharm(ops.CharmBase):
             self._control_socket.remove_s3_credentials()
             self._stored.s3_status_error = None
         except Exception as exc:  # pragma: no cover - defensive
-            logger.error("failed to remove S3 credentials: %s", exc)
-            self._stored.s3_status_error = "failed to remove s3 credentials"
+            logger.error('failed to remove S3 credentials: %s', exc)
+            self._stored.s3_status_error = 'failed to remove s3 credentials'
 
     def _on_loki_push_api_endpoint_joined(self, _event):
         """Handle new or updated Loki push API endpoint."""
-        self._stored.loki_endpoint_seen = bool(self.model.relations["loki-push-api"])
+        self._stored.loki_endpoint_seen = bool(self.model.relations['loki-push-api'])
         self._reconcile_loki_endpoint(report_applying_status=True)
 
     def _on_loki_push_api_endpoint_departed(self, _event):
@@ -696,38 +706,38 @@ class JujuControllerCharm(ops.CharmBase):
         if not ca_list:
             return
 
-        logger.info("Loki CA certificate updated from relation id %s", event.relation_id)
+        logger.info('Loki CA certificate updated from relation id %s', event.relation_id)
         self._stored.loki_endpoint_seen = True
         self._reconcile_loki_endpoint(report_applying_status=True)
 
     def _on_receive_loki_ca_cert_removed(self, event):
-        logger.info("Loki CA certificate removed from relation id %s", event.relation_id)
+        logger.info('Loki CA certificate removed from relation id %s', event.relation_id)
         self._reconcile_loki_endpoint()
 
-    def _current_loki_endpoint(self) -> Optional[dict]:
+    def _current_loki_endpoint(self) -> dict | None:
         endpoints = self._loki_consumer.loki_endpoints
         if not endpoints:
             self._stored.loki_status_error = None
             return None
-        endpoint = endpoints[0]["url"]
+        endpoint = endpoints[0]['url']
         ca_cert = self._current_ca_cert(self.loki_certificate_transfer)
-        insecure_skip_verify = self.config["loki-insecure-skip-verify"]
+        insecure_skip_verify = self.config['loki-insecure-skip-verify']
 
         if self._endpoint_requires_ca_cert(endpoint) and (
             not ca_cert and not insecure_skip_verify
         ):
             self._stored.loki_status_error = (
-                "loki endpoint requires a CA cert, but none is available"
+                'loki endpoint requires a CA cert, but none is available'
             )
             self.unit.status = ops.BlockedStatus(self._stored.loki_status_error)
             return None
 
         self._stored.loki_status_error = None
         return {
-            "url": endpoint,
-            "ca_cert": ca_cert,
-            "insecure_skip_verify": insecure_skip_verify,
-            "org_id": self.config["loki-org-id"],
+            'url': endpoint,
+            'ca_cert': ca_cert,
+            'insecure_skip_verify': insecure_skip_verify,
+            'org_id': self.config['loki-org-id'],
         }
 
     def _reconcile_loki_endpoint(self, report_applying_status: bool = False):
@@ -737,14 +747,14 @@ class JujuControllerCharm(ops.CharmBase):
         endpoint = self._current_loki_endpoint()
         if endpoint:
             try:
-                logger.info("applying Loki push API endpoint")
+                logger.info('applying Loki push API endpoint')
                 self._control_socket.set_loki_endpoint(endpoint)
                 self._stored.loki_status_error = None
                 if report_applying_status:
-                    self.unit.status = ops.MaintenanceStatus("applying loki endpoint")
+                    self.unit.status = ops.MaintenanceStatus('applying loki endpoint')
             except Exception as exc:  # pragma: no cover - defensive
-                logger.error("failed to apply Loki endpoint: %s", exc)
-                self._stored.loki_status_error = "failed to apply loki endpoint"
+                logger.error('failed to apply Loki endpoint: %s', exc)
+                self._stored.loki_status_error = 'failed to apply loki endpoint'
                 self.unit.status = ops.BlockedStatus(self._stored.loki_status_error)
             return
 
@@ -763,39 +773,40 @@ class JujuControllerCharm(ops.CharmBase):
                 self._stored.loki_status_error = None
                 self._stored.loki_endpoint_seen = False
                 return
-            logger.error("failed to remove Loki endpoint: %s", exc)
-            self._stored.loki_status_error = "failed to remove loki endpoint"
+            logger.error('failed to remove Loki endpoint: %s', exc)
+            self._stored.loki_status_error = 'failed to remove loki endpoint'
             self.unit.status = ops.BlockedStatus(self._stored.loki_status_error)
         except Exception as exc:  # pragma: no cover - defensive
-            logger.error("failed to remove Loki endpoint: %s", exc)
-            self._stored.loki_status_error = "failed to remove loki endpoint"
+            logger.error('failed to remove Loki endpoint: %s', exc)
+            self._stored.loki_status_error = 'failed to remove loki endpoint'
             self.unit.status = ops.BlockedStatus(self._stored.loki_status_error)
 
 
 def metrics_username(relation: ops.Relation) -> str:
-    """
-    Return the username used to access the metrics endpoint, for the given
-    relation. This username has the form
+    """Return the username used to access the metrics endpoint.
+
+    This username has the form
         juju-metrics-r1
     """
     return f'juju-metrics-r{relation.id}'
 
 
 def generate_password() -> str:
+    """Generate a random URL-safe password."""
     return secrets.token_urlsafe(16)
 
 
-class AgentConfException(Exception):
+class AgentConfError(Exception):
     """Raised when there are errors regarding agent configuration."""
 
 
-class ControllerProcessException(Exception):
+class ControllerProcessError(Exception):
     """Raised when there are errors regarding detection of controller service or process."""
 
 
-class DBBindAddressException(Exception):
-    """Raised when there are errors regarding the database bind addresses"""
+class DBBindAddressError(Exception):
+    """Raised when there are errors regarding the database bind addresses."""
 
 
-if __name__ == "__main__":
-    ops.main.main(JujuControllerCharm)
+if __name__ == '__main__':
+    main(JujuControllerCharm)
