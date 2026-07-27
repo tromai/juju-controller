@@ -187,6 +187,12 @@ jobs:
             --controller-charm-channel=${{ needs.channel.outputs.test }}
         EOF
 
+    - name: Bootstrap on K8s
+      if: matrix.cloud == 'k8s'
+      run: |
+        juju bootstrap k8s c \
+          --controller-charm-channel=${{ needs.channel.outputs.test }}
+
     - name: Check charm status
       run: |
         juju switch controller
