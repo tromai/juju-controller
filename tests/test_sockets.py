@@ -5,8 +5,9 @@
 import io
 import unittest
 import urllib.error
-from controlsocket import ControlSocketClient
+
 from configchangesocket import ConfigChangeSocketClient
+from controlsocket import ControlSocketClient
 from unixsocket import APIError, ConnectionError
 
 
@@ -21,8 +22,8 @@ class TestClass(unittest.TestCase):
             body=r'{"username": "juju-metrics-r0", "password": "passwd"}',
             response=MockResponse(
                 headers=MockHeaders(content_type='application/json'),
-                body=r'{"message":"created user \"juju-metrics-r0\""}'
-            )
+                body=r'{"message":"created user \"juju-metrics-r0\""}',
+            ),
         )
         control_socket.add_metrics_user('juju-metrics-r0', 'passwd')
 
@@ -39,8 +40,8 @@ class TestClass(unittest.TestCase):
                 code=409,
                 msg='',
                 hdrs=None,
-                fp=io.BytesIO(br'{"error":"user \"juju-metrics-r0\" already exists"}'),
-            )
+                fp=io.BytesIO(rb'{"error":"user \"juju-metrics-r0\" already exists"}'),
+            ),
         )
 
         with self.assertRaises(APIError) as cm:
@@ -60,8 +61,8 @@ class TestClass(unittest.TestCase):
             body=None,
             response=MockResponse(
                 headers=MockHeaders(content_type='application/json'),
-                body=r'{"message":"deleted user \"juju-metrics-r0\""}'
-            )
+                body=r'{"message":"deleted user \"juju-metrics-r0\""}',
+            ),
         )
         control_socket.remove_metrics_user('juju-metrics-r0')
 
@@ -78,8 +79,8 @@ class TestClass(unittest.TestCase):
                 code=404,
                 msg='',
                 hdrs=None,
-                fp=io.BytesIO(br'{"error":"user \"juju-metrics-r0\" not found"}'),
-            )
+                fp=io.BytesIO(rb'{"error":"user \"juju-metrics-r0\" not found"}'),
+            ),
         )
 
         with self.assertRaises(APIError) as cm:
@@ -103,8 +104,8 @@ class TestClass(unittest.TestCase):
             ),
             response=MockResponse(
                 headers=MockHeaders(content_type='application/json'),
-                body=r'{"message":"updated charm tracing config"}'
-            )
+                body=r'{"message":"updated charm tracing config"}',
+            ),
         )
 
         control_socket.set_charm_tracing_config(
@@ -131,8 +132,8 @@ class TestClass(unittest.TestCase):
             ),
             response=MockResponse(
                 headers=MockHeaders(content_type='application/json'),
-                body=r'{"message":"updated workload tracing config"}'
-            )
+                body=r'{"message":"updated workload tracing config"}',
+            ),
         )
 
         control_socket.set_workload_tracing_config(
@@ -159,16 +160,14 @@ class TestClass(unittest.TestCase):
             ),
             response=MockResponse(
                 headers=MockHeaders(content_type='application/json'),
-                body=r'{"message":"set loki endpoint"}'
-            )
+                body=r'{"message":"set loki endpoint"}',
+            ),
         )
-        control_socket.set_loki_endpoint(
-            {
-                "url": "http://loki:3100/loki/api/v1/push",
-                "ca_cert": "-----BEGIN CERTIFICATE-----\nabc\n-----END CERTIFICATE-----",
-                "insecure_skip_verify": True,
-            }
-        )
+        control_socket.set_loki_endpoint({
+            'url': 'http://loki:3100/loki/api/v1/push',
+            'ca_cert': '-----BEGIN CERTIFICATE-----\nabc\n-----END CERTIFICATE-----',
+            'insecure_skip_verify': True,
+        })
 
     def test_set_loki_endpoint_fail(self):
         mock_opener = MockOpener(self)
@@ -187,18 +186,16 @@ class TestClass(unittest.TestCase):
                 code=500,
                 msg='',
                 hdrs=None,
-                fp=io.BytesIO(br'{"error":"internal error"}'),
-            )
+                fp=io.BytesIO(rb'{"error":"internal error"}'),
+            ),
         )
 
         with self.assertRaises(APIError) as cm:
-            control_socket.set_loki_endpoint(
-                {
-                    "url": "http://loki:3100/loki/api/v1/push",
-                    "ca_cert": None,
-                    "insecure_skip_verify": False,
-                }
-            )
+            control_socket.set_loki_endpoint({
+                'url': 'http://loki:3100/loki/api/v1/push',
+                'ca_cert': None,
+                'insecure_skip_verify': False,
+            })
         self.assertEqual(cm.exception.body, {'error': 'internal error'})
         self.assertEqual(cm.exception.code, 500)
         self.assertEqual(cm.exception.message, 'internal error')
@@ -213,8 +210,8 @@ class TestClass(unittest.TestCase):
             body=None,
             response=MockResponse(
                 headers=MockHeaders(content_type='application/json'),
-                body=r'{"message":"removed loki endpoint"}'
-            )
+                body=r'{"message":"removed loki endpoint"}',
+            ),
         )
         control_socket.remove_loki_endpoint()
 
@@ -231,8 +228,8 @@ class TestClass(unittest.TestCase):
                 code=404,
                 msg='',
                 hdrs=None,
-                fp=io.BytesIO(br'{"error":"loki endpoint not found"}'),
-            )
+                fp=io.BytesIO(rb'{"error":"loki endpoint not found"}'),
+            ),
         )
 
         with self.assertRaises(APIError) as cm:
@@ -249,7 +246,7 @@ class TestClass(unittest.TestCase):
             url='http://localhost/metrics-users',
             method='POST',
             body=r'{"username": "juju-metrics-r0", "password": "passwd"}',
-            error=urllib.error.URLError('could not connect to socket')
+            error=urllib.error.URLError('could not connect to socket'),
         )
 
         with self.assertRaisesRegex(ConnectionError, 'could not connect to socket'):
@@ -264,9 +261,8 @@ class TestClass(unittest.TestCase):
             method='GET',
             body=None,
             response=MockResponse(
-                headers=MockHeaders(content_type='application/text'),
-                body=b'666'
-            )
+                headers=MockHeaders(content_type='application/text'), body=b'666'
+            ),
         )
 
         id = config_reload_socket.get_controller_agent_id()

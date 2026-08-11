@@ -10,5 +10,40 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "coverage",
-    "flake8",
+    "ruff",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 99
+# From previous flake8 config
+extend-exclude = [    
+    ".venv",
+    ".git", 
+    "build",
+    "dist",
+    "*.egg_info",
+    "lib",
+]
+
+[tool.ruff.format]
+# Up to discussion
+quote-style = "single"
+
+[tool.ruff.lint]
+# Potential rules to select: 
+#    "D" (following https://github.com/canonical/operator/blob/main/examples/k8s-5-observe/pyproject.toml - 29 errors, 5 auto fixes)
+select = [
+    # Compatible with previous flake8 config
+    "E", "W", "F", "C", "N",
+    # Addition rules
+    # Unsorted imports
+    "I001",
+    # Upgrade Python syntax.
+    "UP",
+]
+ignore = [
+    # error-suffix-on-exception-name (N818). The suffix "Exception" is used widely in this repo.
+    # I don't think we should change them all into "Error" suffix.
+    "N818",
 ]
