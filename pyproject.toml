@@ -7,7 +7,7 @@ dependencies = [
     "cosl",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
     "codespell",
     "coverage",
