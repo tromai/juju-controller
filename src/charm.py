@@ -9,6 +9,7 @@ import urllib.parse
 from pathlib import Path
 from typing import cast
 
+import ops
 import yaml
 from charms.certificate_transfer_interface.v1.certificate_transfer import (
     CertificateTransferRequires,
@@ -17,17 +18,6 @@ from charms.data_platform_libs.v0.s3 import CredentialsChangedEvent, S3Requirer
 from charms.loki_k8s.v1.loki_push_api import LokiPushApiConsumer
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
 from charms.tempo_coordinator_k8s.v0.tracing import TracingEndpointRequirer
-from ops.charm import (
-    CharmBase,
-    CollectStatusEvent,
-    InstallEvent,
-    LeaderElectedEvent,
-    RelationDepartedEvent,
-    RelationJoinedEvent,
-)
-from ops.framework import StoredState
-from ops.main import main
-from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, Relation
 
 import configchangesocket
 import controlsocket
@@ -36,14 +26,14 @@ from unixsocket import APIError
 logger = logging.getLogger(__name__)
 
 
-class JujuControllerCharm(CharmBase):
+class JujuControllerCharm(ops.CharmBase):
     METRICS_SOCKET_PATH = "/var/lib/juju/control.socket"
     CONFIG_SOCKET_PATH = "/var/lib/juju/configchange.socket"
     DB_BIND_ADDR_KEY = "db-bind-address"
     ALL_BIND_ADDRS_KEY = "db-bind-addresses"
     AGENT_ID_KEY = "agent-id"
 
-    _stored = StoredState()
+    _stored = ops.StoredState()
 
     def __init__(self, *args):
         super().__init__(*args)
@@ -184,16 +174,16 @@ class JujuControllerCharm(CharmBase):
             self._on_receive_loki_ca_cert_removed,
         )
 
-    def _on_install(self, event: InstallEvent):
+    def _on_install(self, event: ops.InstallEvent):
         """Ensure that the controller configuration file exists."""
         file_path = self._controller_config_path()
         Path(file_path).parent.mkdir(parents=True, exist_ok=True)
         open(file_path, "w+").close()
 
     def _on_start(self, _):
-        self.unit.status = ActiveStatus()
+        self.unit.status = ops.ActiveStatus()
 
-    def _on_leader_elected(self, _event: LeaderElectedEvent):
+    def _on_leader_elected(self, _event: ops.LeaderElectedEvent):
         self._update_charm_tracing_config()
         self._update_workload_tracing_config()
         self._reconcile_loki_endpoint()
@@ -223,11 +213,11 @@ class JujuControllerCharm(CharmBase):
             self._stored.s3_status_pending = False
             self._stored.s3_status_error = "failed to reapply s3 credentials"
 
-    def _on_collect_status(self, event: CollectStatusEvent):
+    def _on_collect_status(self, event: ops.CollectStatusEvent):
         has_blocking_status = False
         if len(self._stored.last_bind_addresses) > 1:
             event.add_status(
-                BlockedStatus(
+                ops.BlockedStatus(
                     "multiple possible DB bind addresses; set a suitable dbcluster network binding"
                 )
             )
@@ -237,34 +227,34 @@ class JujuControllerCharm(CharmBase):
             self.api_port()
         except AgentConfException as e:
             event.add_status(
-                BlockedStatus(f"cannot read controller API port from agent configuration: {e}")
+                ops.BlockedStatus(f"cannot read controller API port from agent configuration: {e}")
             )
             has_blocking_status = True
 
         if self._stored.tracing_status_error:
-            event.add_status(BlockedStatus(self._stored.tracing_status_error))
+            event.add_status(ops.BlockedStatus(self._stored.tracing_status_error))
             has_blocking_status = True
 
         if self._stored.workload_tracing_status_error:
-            event.add_status(BlockedStatus(self._stored.workload_tracing_status_error))
+            event.add_status(ops.BlockedStatus(self._stored.workload_tracing_status_error))
             has_blocking_status = True
 
         if self._stored.s3_status_error:
-            event.add_status(BlockedStatus(self._stored.s3_status_error))
+            event.add_status(ops.BlockedStatus(self._stored.s3_status_error))
             has_blocking_status = True
 
         if self._stored.loki_status_error:
-            event.add_status(BlockedStatus(self._stored.loki_status_error))
+            event.add_status(ops.BlockedStatus(self._stored.loki_status_error))
             has_blocking_status = True
 
         if self._stored.s3_status_pending:
             if not has_blocking_status:
-                event.add_status(MaintenanceStatus("applying s3 credentials"))
+                event.add_status(ops.MaintenanceStatus("applying s3 credentials"))
             self._stored.s3_status_pending = False
             return
 
         if not has_blocking_status:
-            event.add_status(ActiveStatus())
+            event.add_status(ops.ActiveStatus())
 
     def _on_config_changed(self, _):
         controller_url = self.config["controller-url"]
@@ -288,7 +278,7 @@ class JujuControllerCharm(CharmBase):
         port = self.api_port()
         if port is None:
             logger.error("machine does not appear to be a controller")
-            self.unit.status = BlockedStatus("machine does not appear to be a controller")
+            self.unit.status = ops.BlockedStatus("machine does not appear to be a controller")
             return
 
         address = None
@@ -302,7 +292,7 @@ class JujuControllerCharm(CharmBase):
                     "port": str(port),
                 })
 
-    def _on_metrics_endpoint_relation_created(self, event: RelationJoinedEvent):
+    def _on_metrics_endpoint_relation_created(self, event: ops.RelationJoinedEvent):
         username = metrics_username(event.relation)
         password = generate_password()
         self._control_socket.add_metrics_user(username, password)
@@ -311,7 +301,7 @@ class JujuControllerCharm(CharmBase):
         try:
             api_port = self.api_port()
         except AgentConfException as e:
-            self.unit.status = BlockedStatus(
+            self.unit.status = ops.BlockedStatus(
                 f"can't read controller API port from agent.conf: {e}"
             )
             logger.error("cannot read controller API port from agent configuration: %s", e)
@@ -337,7 +327,7 @@ class JujuControllerCharm(CharmBase):
         )
         metrics_endpoint.set_scrape_job_spec()
 
-    def _on_metrics_endpoint_relation_broken(self, event: RelationDepartedEvent):
+    def _on_metrics_endpoint_relation_broken(self, event: ops.RelationDepartedEvent):
         username = metrics_username(event.relation)
         self._control_socket.remove_metrics_user(username)
 
@@ -589,7 +579,7 @@ class JujuControllerCharm(CharmBase):
             self._stored.tracing_status_error = (
                 "charm tracing endpoint requires a CA cert, but none is available"
             )
-            self.unit.status = BlockedStatus(self._stored.tracing_status_error)
+            self.unit.status = ops.BlockedStatus(self._stored.tracing_status_error)
             return
 
         try:
@@ -644,7 +634,7 @@ class JujuControllerCharm(CharmBase):
                 self._stored.workload_tracing_status_error = (
                     "workload tracing endpoint requires a CA cert, but none is available"
                 )
-            self.unit.status = BlockedStatus(self._stored.workload_tracing_status_error)
+            self.unit.status = ops.BlockedStatus(self._stored.workload_tracing_status_error)
             return
 
         try:
@@ -733,7 +723,7 @@ class JujuControllerCharm(CharmBase):
             self._stored.loki_status_error = (
                 "loki endpoint requires a CA cert, but none is available"
             )
-            self.unit.status = BlockedStatus(self._stored.loki_status_error)
+            self.unit.status = ops.BlockedStatus(self._stored.loki_status_error)
             return None
 
         self._stored.loki_status_error = None
@@ -755,11 +745,11 @@ class JujuControllerCharm(CharmBase):
                 self._control_socket.set_loki_endpoint(endpoint)
                 self._stored.loki_status_error = None
                 if report_applying_status:
-                    self.unit.status = MaintenanceStatus("applying loki endpoint")
+                    self.unit.status = ops.MaintenanceStatus("applying loki endpoint")
             except Exception as exc:  # pragma: no cover - defensive
                 logger.error("failed to apply Loki endpoint: %s", exc)
                 self._stored.loki_status_error = "failed to apply loki endpoint"
-                self.unit.status = BlockedStatus(self._stored.loki_status_error)
+                self.unit.status = ops.BlockedStatus(self._stored.loki_status_error)
             return
 
         if self._stored.loki_status_error:
@@ -779,14 +769,14 @@ class JujuControllerCharm(CharmBase):
                 return
             logger.error("failed to remove Loki endpoint: %s", exc)
             self._stored.loki_status_error = "failed to remove loki endpoint"
-            self.unit.status = BlockedStatus(self._stored.loki_status_error)
+            self.unit.status = ops.BlockedStatus(self._stored.loki_status_error)
         except Exception as exc:  # pragma: no cover - defensive
             logger.error("failed to remove Loki endpoint: %s", exc)
             self._stored.loki_status_error = "failed to remove loki endpoint"
-            self.unit.status = BlockedStatus(self._stored.loki_status_error)
+            self.unit.status = ops.BlockedStatus(self._stored.loki_status_error)
 
 
-def metrics_username(relation: Relation) -> str:
+def metrics_username(relation: ops.Relation) -> str:
     """
     Return the username used to access the metrics endpoint, for the given
     relation. This username has the form
@@ -812,4 +802,4 @@ class DBBindAddressException(Exception):
 
 
 if __name__ == "__main__":
-    main(JujuControllerCharm)
+    ops.main(JujuControllerCharm)
