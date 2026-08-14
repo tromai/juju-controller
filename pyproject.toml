@@ -10,6 +10,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "coverage",
+    "pyright",
     "ruff",
 ]
 
@@ -45,3 +46,8 @@ ignore = [
     # I don't think we should change them all into "Error" suffix.
     "N818",
 ]
+
+[tool.pyright]
+pythonVersion = "3.10"
+reportUnnecessaryTypeIgnoreComment = "error"
+include = ["src", "tests"]
