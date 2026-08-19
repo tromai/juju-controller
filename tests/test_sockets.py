@@ -5,7 +5,7 @@
 import io
 import unittest
 import urllib.error
-from email import message
+from http.client import HTTPMessage
 
 from configchangesocket import ConfigChangeSocketClient
 from controlsocket import ControlSocketClient
@@ -40,7 +40,7 @@ class TestClass(unittest.TestCase):
                 url="http://localhost/metrics-users",
                 code=409,
                 msg="",
-                hdrs=message.Message(),
+                hdrs=HTTPMessage(),
                 fp=io.BytesIO(rb'{"error":"user \"juju-metrics-r0\" already exists"}'),
             ),
         )
@@ -79,7 +79,7 @@ class TestClass(unittest.TestCase):
                 url="http://localhost/metrics-users/juju-metrics-r0",
                 code=404,
                 msg="",
-                hdrs=message.Message(),
+                hdrs=HTTPMessage(),
                 fp=io.BytesIO(rb'{"error":"user \"juju-metrics-r0\" not found"}'),
             ),
         )
@@ -186,7 +186,7 @@ class TestClass(unittest.TestCase):
                 url="http://localhost/loki-endpoint",
                 code=500,
                 msg="",
-                hdrs=message.Message(),
+                hdrs=HTTPMessage(),
                 fp=io.BytesIO(rb'{"error":"internal error"}'),
             ),
         )
@@ -228,7 +228,7 @@ class TestClass(unittest.TestCase):
                 url="http://localhost/loki-endpoint",
                 code=404,
                 msg="",
-                hdrs=message.Message(),
+                hdrs=HTTPMessage(),
                 fp=io.BytesIO(rb'{"error":"loki endpoint not found"}'),
             ),
         )
