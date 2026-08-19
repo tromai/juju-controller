@@ -18,7 +18,7 @@ format:
 lint:
 	uv run --frozen --group dev ruff check --preview
 	uv run --frozen --group dev ruff format --preview --check
-# 	uv run --frozen --group dev pyright
+	uv run --frozen --group dev pyright
 	uv run --frozen --group dev codespell
 
 unit:
