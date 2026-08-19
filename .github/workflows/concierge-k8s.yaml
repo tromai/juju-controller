@@ -1,0 +1,30 @@
+# Concierge configuration for CI integration tests on Canonical K8s.
+#
+# Based on the upstream `k8s` preset (https://github.com/canonical/concierge),
+# but with `bootstrap: false` so that no stock Juju controller is bootstrapped.
+# We bootstrap our own locally-built controller charm afterwards, using:
+#
+#   juju bootstrap k8s c --config bootstrap-timeout=1800 \
+#     --controller-charm-path=<path to packed charm>
+
+juju:
+  # The default 20-minute bootstrap timeout is too short for the controller
+  # pod to expose its API on slow CI runners; pin a longer one so the
+  # config works out of the box on busy GHA hosts.
+  extra-bootstrap-args: --config bootstrap-timeout=1800
+  model-defaults:
+    test-mode: "true"
+    automatically-retry-hooks: "false"
+
+providers:
+  lxd:
+    enable: false
+  k8s:
+    enable: true
+    bootstrap: false
+    features:
+      load-balancer:
+        l2-mode: "true"
+        cidrs: "10.43.45.0/28"
+      local-storage: {}
+      network: {}

@@ -19,7 +19,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
 
       - name: Run lint
         run: make lint
@@ -32,7 +32,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
 
       - name: Run unit tests
         run: make unit
@@ -51,7 +51,7 @@ jobs:
           python-version: '3.10'
 
       - name: Install uv
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
 
       - name: Set up LXD
         uses: canonical/setup-lxd@8c6a87bfb56aa48f3fb9b830baa18562d8bfd4ee  # v1
@@ -68,7 +68,7 @@ jobs:
         run: sg lxd -c "charmcraft pack"
 
       - name: Upload charm artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: charm
           path: "*.charm"
@@ -144,7 +144,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        cloud: ["lxd", "microk8s"]
+        cloud: ["lxd", "microk8s", "k8s"]
 
     steps:
     - name: Save charmcraft logs as artifact
@@ -163,8 +163,16 @@ jobs:
       if: matrix.cloud == 'microk8s'
       uses: balchua/microk8s-actions@13f73436011eb4925c22526f64fb3ecdd81289a9  # v0.4.3
       with:
-        channel: "1.31-strict/stable"
+        channel: "1.36-strict/stable"
         addons: '["dns", "hostpath-storage"]'
+
+    - name: Set up Canonical K8s
+      if: matrix.cloud == 'k8s'
+      run: |
+        sudo snap install --classic concierge
+        # The config is based on the k8s preset, but with bootstrap disabled:
+        # we bootstrap our own locally-built controller charm afterwards.
+        sudo concierge prepare -c .github/workflows/concierge-k8s.yaml
 
     - name: Download packed charm
       id: download
@@ -204,6 +212,13 @@ jobs:
           juju bootstrap microk8s c \
             --controller-charm-path="${{ steps.charm-path.outputs.charm-path }}"
         EOF
+
+    - name: Bootstrap on Canonical K8s
+      if: matrix.cloud == 'k8s'
+      run: |
+        juju bootstrap k8s c \
+          --config bootstrap-timeout=1800 \
+          --controller-charm-path="${{ steps.charm-path.outputs.charm-path }}"
 
     - name: Check charm status
       run: |
