@@ -1,4 +1,5 @@
 name: juju-controller
+title: Juju Controller Charm
 description: |
   The Juju controller charm is used to expose various pieces
   of functionality of a Juju controller.
@@ -6,16 +7,25 @@ summary: |
   The Juju controller.
 type: charm
 
+links:
+  issues:
+    - https://github.com/juju/juju-controller/issues
+  source:
+    - https://github.com/juju/juju-controller
+
 assumes:
 - juju >= 4.0
 
 provides:
   dashboard:
     interface: juju-dashboard
+    optional: false
   website:
     interface: http
+    optional: false
   metrics-endpoint:
     interface: prometheus_scrape
+    optional: false
 
 requires:
   charm-tracing:
@@ -61,3 +71,18 @@ charm-libs:
     version: "0"
   - lib: certificate_transfer_interface.certificate_transfer
     version: "1"
+
+config:
+  options:
+    controller-url:
+      default: ""
+      description: The URL used to access the controller API.
+      type: string
+    identity-provider-url:
+      default: ""
+      description: The URL used to access an external identity provider.
+      type: string
+    is-juju:
+      default: true
+      description: Whether this is a standalone Juju controller
+      type: boolean
