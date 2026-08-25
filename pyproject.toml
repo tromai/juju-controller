@@ -1,7 +1,7 @@
 [project]
 name = "juju-controller"
 version = "0.1.0"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 dependencies = [
     "ops",
     "cosl",
@@ -10,5 +10,38 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "coverage",
-    "flake8",
+    "ruff",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 99
+# From previous flake8 config
+extend-exclude = [
+    ".venv",
+    ".git",
+    "build",
+    "dist",
+    "*.egg_info",
+    "lib",
+]
+
+[tool.ruff.format]
+# Up to discussion
+quote-style = "double"
+
+[tool.ruff.lint]
+select = [
+    # Compatible with previous flake8 config
+    "E", "W", "F", "C901", "N",
+    # Addition rules
+    # Unsorted imports
+    "I001",
+    # Upgrade Python syntax.
+    "UP",
+]
+ignore = [
+    # error-suffix-on-exception-name (N818). The suffix "Exception" is used widely in this repo.
+    # I don't think we should change them all into "Error" suffix.
+    "N818",
 ]

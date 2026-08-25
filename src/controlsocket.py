@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 # Copyright 2023 Canonical Ltd.
 # Licensed under the GPLv3, see LICENSE file for details.
+import logging
 import urllib
-from typing import Optional
 
 import unixsocket
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -14,30 +13,30 @@ class ControlSocketClient(unixsocket.SocketClient):
     """
     Client to Juju control socket.
     """
-    def __init__(self, socket_path: str,
-                 opener: Optional[urllib.request.OpenerDirector] = None):
+
+    def __init__(self, socket_path: str, opener: urllib.request.OpenerDirector | None = None):
         super().__init__(socket_path, opener=opener)
 
     def add_metrics_user(self, username: str, password: str):
         resp = self.json_request(
-            method='POST',
-            path='/metrics-users',
+            method="POST",
+            path="/metrics-users",
             body={"username": username, "password": password},
         )
-        logger.debug('result of add_metrics_user request: %r', resp)
+        logger.debug("result of add_metrics_user request: %r", resp)
 
     def remove_metrics_user(self, username: str):
         resp = self.json_request(
-            method='DELETE',
-            path=f'/metrics-users/{username}',
+            method="DELETE",
+            path=f"/metrics-users/{username}",
         )
-        logger.debug('result of remove_metrics_user request: %r', resp)
+        logger.debug("result of remove_metrics_user request: %r", resp)
 
     def set_charm_tracing_config(
         self,
-        grpc_endpoint: Optional[str],
-        http_endpoint: Optional[str],
-        ca_cert: Optional[str],
+        grpc_endpoint: str | None,
+        http_endpoint: str | None,
+        ca_cert: str | None,
     ):
         """Set the tracing configuration for the charm."""
         body = {
@@ -46,8 +45,8 @@ class ControlSocketClient(unixsocket.SocketClient):
             "ca_cert": ca_cert,
         }
         resp = self.json_request(
-            method='POST',
-            path='/charm-tracing-config',
+            method="POST",
+            path="/charm-tracing-config",
             body=body,
         )
-        logger.debug('result of set_charm_tracing_config request: %r', resp)
+        logger.debug("result of set_charm_tracing_config request: %r", resp)

@@ -5,152 +5,152 @@
 import io
 import unittest
 import urllib.error
-from controlsocket import ControlSocketClient
+
 from configchangesocket import ConfigChangeSocketClient
+from controlsocket import ControlSocketClient
 from unixsocket import APIError, ConnectionError
 
 
 class TestClass(unittest.TestCase):
     def test_add_metrics_user_success(self):
         mock_opener = MockOpener(self)
-        control_socket = ControlSocketClient('fake_socket_path', opener=mock_opener)
+        control_socket = ControlSocketClient("fake_socket_path", opener=mock_opener)
 
         mock_opener.expect(
-            url='http://localhost/metrics-users',
-            method='POST',
+            url="http://localhost/metrics-users",
+            method="POST",
             body=r'{"username": "juju-metrics-r0", "password": "passwd"}',
             response=MockResponse(
-                headers=MockHeaders(content_type='application/json'),
-                body=r'{"message":"created user \"juju-metrics-r0\""}'
-            )
+                headers=MockHeaders(content_type="application/json"),
+                body=r'{"message":"created user \"juju-metrics-r0\""}',
+            ),
         )
-        control_socket.add_metrics_user('juju-metrics-r0', 'passwd')
+        control_socket.add_metrics_user("juju-metrics-r0", "passwd")
 
     def test_add_metrics_user_fail(self):
         mock_opener = MockOpener(self)
-        control_socket = ControlSocketClient('fake_socket_path', opener=mock_opener)
+        control_socket = ControlSocketClient("fake_socket_path", opener=mock_opener)
 
         mock_opener.expect(
-            url='http://localhost/metrics-users',
-            method='POST',
+            url="http://localhost/metrics-users",
+            method="POST",
             body=r'{"username": "juju-metrics-r0", "password": "passwd"}',
             error=urllib.error.HTTPError(
-                url='http://localhost/metrics-users',
+                url="http://localhost/metrics-users",
                 code=409,
-                msg='',
+                msg="",
                 hdrs=None,
-                fp=io.BytesIO(br'{"error":"user \"juju-metrics-r0\" already exists"}'),
-            )
+                fp=io.BytesIO(rb'{"error":"user \"juju-metrics-r0\" already exists"}'),
+            ),
         )
 
         with self.assertRaises(APIError) as cm:
-            control_socket.add_metrics_user('juju-metrics-r0', 'passwd')
-        self.assertEqual(cm.exception.body, {'error': 'user "juju-metrics-r0" already exists'})
+            control_socket.add_metrics_user("juju-metrics-r0", "passwd")
+        self.assertEqual(cm.exception.body, {"error": 'user "juju-metrics-r0" already exists'})
         self.assertEqual(cm.exception.code, 409)
-        self.assertEqual(cm.exception.status, '')
+        self.assertEqual(cm.exception.status, "")
         self.assertEqual(cm.exception.message, 'user "juju-metrics-r0" already exists')
 
     def test_remove_metrics_user_success(self):
         mock_opener = MockOpener(self)
-        control_socket = ControlSocketClient('fake_socket_path', opener=mock_opener)
+        control_socket = ControlSocketClient("fake_socket_path", opener=mock_opener)
 
         mock_opener.expect(
-            url='http://localhost/metrics-users/juju-metrics-r0',
-            method='DELETE',
+            url="http://localhost/metrics-users/juju-metrics-r0",
+            method="DELETE",
             body=None,
             response=MockResponse(
-                headers=MockHeaders(content_type='application/json'),
-                body=r'{"message":"deleted user \"juju-metrics-r0\""}'
-            )
+                headers=MockHeaders(content_type="application/json"),
+                body=r'{"message":"deleted user \"juju-metrics-r0\""}',
+            ),
         )
-        control_socket.remove_metrics_user('juju-metrics-r0')
+        control_socket.remove_metrics_user("juju-metrics-r0")
 
     def test_remove_metrics_user_fail(self):
         mock_opener = MockOpener(self)
-        control_socket = ControlSocketClient('fake_socket_path', opener=mock_opener)
+        control_socket = ControlSocketClient("fake_socket_path", opener=mock_opener)
 
         mock_opener.expect(
-            url='http://localhost/metrics-users/juju-metrics-r0',
-            method='DELETE',
+            url="http://localhost/metrics-users/juju-metrics-r0",
+            method="DELETE",
             body=None,
             error=urllib.error.HTTPError(
-                url='http://localhost/metrics-users/juju-metrics-r0',
+                url="http://localhost/metrics-users/juju-metrics-r0",
                 code=404,
-                msg='',
+                msg="",
                 hdrs=None,
-                fp=io.BytesIO(br'{"error":"user \"juju-metrics-r0\" not found"}'),
-            )
+                fp=io.BytesIO(rb'{"error":"user \"juju-metrics-r0\" not found"}'),
+            ),
         )
 
         with self.assertRaises(APIError) as cm:
-            control_socket.remove_metrics_user('juju-metrics-r0')
-        self.assertEqual(cm.exception.body, {'error': 'user "juju-metrics-r0" not found'})
+            control_socket.remove_metrics_user("juju-metrics-r0")
+        self.assertEqual(cm.exception.body, {"error": 'user "juju-metrics-r0" not found'})
         self.assertEqual(cm.exception.code, 404)
-        self.assertEqual(cm.exception.status, '')
+        self.assertEqual(cm.exception.status, "")
         self.assertEqual(cm.exception.message, 'user "juju-metrics-r0" not found')
 
     def test_set_charm_tracing_config_success(self):
         mock_opener = MockOpener(self)
-        control_socket = ControlSocketClient('fake_socket_path', opener=mock_opener)
+        control_socket = ControlSocketClient("fake_socket_path", opener=mock_opener)
 
         mock_opener.expect(
-            url='http://localhost/charm-tracing-config',
-            method='POST',
+            url="http://localhost/charm-tracing-config",
+            method="POST",
             body=(
                 r'{"grpc_endpoint": "grpc://trace.example.com:4317", '
                 r'"http_endpoint": "http://trace.example.com:4318", '
                 r'"ca_cert": "-----BEGIN CERTIFICATE-----\nabc\n-----END CERTIFICATE-----"}'
             ),
             response=MockResponse(
-                headers=MockHeaders(content_type='application/json'),
-                body=r'{"message":"updated charm tracing config"}'
-            )
+                headers=MockHeaders(content_type="application/json"),
+                body=r'{"message":"updated charm tracing config"}',
+            ),
         )
 
         control_socket.set_charm_tracing_config(
-            grpc_endpoint='grpc://trace.example.com:4317',
-            http_endpoint='http://trace.example.com:4318',
-            ca_cert='-----BEGIN CERTIFICATE-----\nabc\n-----END CERTIFICATE-----',
+            grpc_endpoint="grpc://trace.example.com:4317",
+            http_endpoint="http://trace.example.com:4318",
+            ca_cert="-----BEGIN CERTIFICATE-----\nabc\n-----END CERTIFICATE-----",
         )
 
     def test_connection_error(self):
         mock_opener = MockOpener(self)
-        control_socket = ControlSocketClient('fake_socket_path', opener=mock_opener)
+        control_socket = ControlSocketClient("fake_socket_path", opener=mock_opener)
 
         mock_opener.expect(
-            url='http://localhost/metrics-users',
-            method='POST',
+            url="http://localhost/metrics-users",
+            method="POST",
             body=r'{"username": "juju-metrics-r0", "password": "passwd"}',
-            error=urllib.error.URLError('could not connect to socket')
+            error=urllib.error.URLError("could not connect to socket"),
         )
 
-        with self.assertRaisesRegex(ConnectionError, 'could not connect to socket'):
-            control_socket.add_metrics_user('juju-metrics-r0', 'passwd')
+        with self.assertRaisesRegex(ConnectionError, "could not connect to socket"):
+            control_socket.add_metrics_user("juju-metrics-r0", "passwd")
 
     def test_get_controller_agent_id(self):
         mock_opener = MockOpener(self)
-        config_reload_socket = ConfigChangeSocketClient('fake_socket_path', opener=mock_opener)
+        config_reload_socket = ConfigChangeSocketClient("fake_socket_path", opener=mock_opener)
 
         mock_opener.expect(
-            url='http://localhost/agent-id',
-            method='GET',
+            url="http://localhost/agent-id",
+            method="GET",
             body=None,
             response=MockResponse(
-                headers=MockHeaders(content_type='application/text'),
-                body=b'666'
-            )
+                headers=MockHeaders(content_type="application/text"), body=b"666"
+            ),
         )
 
         id = config_reload_socket.get_controller_agent_id()
-        self.assertEqual(id, '666')
+        self.assertEqual(id, "666")
 
     def test_reload_config(self):
         mock_opener = MockOpener(self)
-        config_reload_socket = ConfigChangeSocketClient('fake_socket_path', opener=mock_opener)
+        config_reload_socket = ConfigChangeSocketClient("fake_socket_path", opener=mock_opener)
 
         mock_opener.expect(
-            url='http://localhost/reload',
-            method='POST',
+            url="http://localhost/reload",
+            method="POST",
             body=None,
             response=None,
         )
@@ -176,7 +176,7 @@ class MockOpener:
         if self.body is None:
             self.test.assertEqual(request.data, None)
         else:
-            self.test.assertEqual(request.data.decode('utf-8'), self.body)
+            self.test.assertEqual(request.data.decode("utf-8"), self.body)
 
         if self.error:
             raise self.error
