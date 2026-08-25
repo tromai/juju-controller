@@ -8,16 +8,13 @@ import secrets
 import urllib.parse
 from pathlib import Path
 
+import ops
 import yaml
 from charms.certificate_transfer_interface.v1.certificate_transfer import (
     CertificateTransferRequires,
 )
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
 from charms.tempo_coordinator_k8s.v0.tracing import TracingEndpointRequirer
-from ops.charm import CharmBase, CollectStatusEvent, InstallEvent
-from ops.framework import StoredState
-from ops.main import main
-from ops.model import ActiveStatus, BlockedStatus, Relation
 
 import configchangesocket
 import controlsocket
@@ -26,7 +23,7 @@ from unixsocket import APIError
 logger = logging.getLogger(__name__)
 
 
-class JujuControllerCharm(CharmBase):
+class JujuControllerCharm(ops.CharmBase):
     METRICS_USERNAME_KEY = "metrics-username"
     METRICS_PASSWORD_KEY = "metrics-password"
     METRICS_SOCKET_PATH = "/var/lib/juju/control.socket"
@@ -35,7 +32,7 @@ class JujuControllerCharm(CharmBase):
     ALL_BIND_ADDRS_KEY = "db-bind-addresses"
     AGENT_ID_KEY = "agent-id"
 
-    _stored = StoredState()
+    _stored = ops.StoredState()
 
     def __init__(self, *args):
         super().__init__(*args)
@@ -105,19 +102,19 @@ class JujuControllerCharm(CharmBase):
         )
         self._metrics_endpoint = None
 
-    def _on_install(self, event: InstallEvent):
+    def _on_install(self, event: ops.InstallEvent):
         """Ensure that the controller configuration file exists."""
         file_path = self._controller_config_path()
         Path(file_path).parent.mkdir(parents=True, exist_ok=True)
         open(file_path, "w+").close()
 
     def _on_start(self, _):
-        self.unit.status = ActiveStatus()
+        self.unit.status = ops.ActiveStatus()
 
-    def _on_collect_status(self, event: CollectStatusEvent):
+    def _on_collect_status(self, event: ops.CollectStatusEvent):
         if len(self._stored.last_bind_addresses) > 1:
             event.add_status(
-                BlockedStatus(
+                ops.BlockedStatus(
                     "multiple possible DB bind addresses; set a suitable dbcluster network binding"
                 )
             )
@@ -126,10 +123,10 @@ class JujuControllerCharm(CharmBase):
             self.api_port()
         except AgentConfException as e:
             event.add_status(
-                BlockedStatus(f"cannot read controller API port from agent configuration: {e}")
+                ops.BlockedStatus(f"cannot read controller API port from agent configuration: {e}")
             )
 
-        event.add_status(ActiveStatus())
+        event.add_status(ops.ActiveStatus())
 
     def _on_config_changed(self, _):
         controller_url = self.config["controller-url"]
@@ -152,7 +149,7 @@ class JujuControllerCharm(CharmBase):
         port = self.api_port()
         if port is None:
             logger.error("machine does not appear to be a controller")
-            self.unit.status = BlockedStatus("machine does not appear to be a controller")
+            self.unit.status = ops.BlockedStatus("machine does not appear to be a controller")
             return
 
         address = None
@@ -190,7 +187,7 @@ class JujuControllerCharm(CharmBase):
         try:
             api_port = self.api_port()
         except AgentConfException as e:
-            self.unit.status = BlockedStatus(
+            self.unit.status = ops.BlockedStatus(
                 f"can't read controller API port from agent.conf: {e}"
             )
             logger.error("cannot read controller API port from agent configuration: %s", e)
@@ -476,7 +473,7 @@ class JujuControllerCharm(CharmBase):
         )
 
 
-def metrics_username(relation: Relation) -> str:
+def metrics_username(relation: ops.Relation) -> str:
     """
     Return the username used to access the metrics endpoint, for the given
     relation. This username has the form
@@ -502,4 +499,4 @@ class DBBindAddressException(Exception):
 
 
 if __name__ == "__main__":
-    main(JujuControllerCharm)
+    ops.main(JujuControllerCharm)

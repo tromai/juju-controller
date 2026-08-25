@@ -7,6 +7,7 @@ import os
 import unittest
 from unittest.mock import mock_open, patch
 
+import ops
 import yaml
 from charms.certificate_transfer_interface.v1.certificate_transfer import (
     ProviderApplicationData,
@@ -17,7 +18,6 @@ from charms.tempo_coordinator_k8s.v0.tracing import (
     TracingProviderAppData,
     TransportProtocolType,
 )
-from ops.model import ActiveStatus, BlockedStatus
 from ops.testing import Harness
 
 from charm import AgentConfException, JujuControllerCharm
@@ -358,10 +358,10 @@ class TestCharm(unittest.TestCase):
 
         harness.add_relation("metrics-endpoint", "prometheus-k8s")
         harness.evaluate_status()
-        self.assertIsInstance(harness.charm.unit.status, BlockedStatus)
+        self.assertIsInstance(harness.charm.unit.status, ops.BlockedStatus)
         self.assertEqual(
             harness.charm.unit.status,
-            BlockedStatus(
+            ops.BlockedStatus(
                 "cannot read controller API port from agent configuration: "
                 "agent.conf key 'apiaddresses' missing"
             ),
@@ -415,7 +415,7 @@ class TestCharm(unittest.TestCase):
         self.assertEqual(json.loads(app_data["db-bind-addresses"]), exp)
 
         harness.evaluate_status()
-        self.assertIsInstance(harness.charm.unit.status, ActiveStatus)
+        self.assertIsInstance(harness.charm.unit.status, ops.ActiveStatus)
 
     @patch("builtins.open", new_callable=mock_open, read_data=agent_conf)
     @patch("configchangesocket.ConfigChangeSocketClient.get_controller_agent_id")
@@ -436,7 +436,7 @@ class TestCharm(unittest.TestCase):
         )
 
         harness.evaluate_status()
-        self.assertIsInstance(harness.charm.unit.status, BlockedStatus)
+        self.assertIsInstance(harness.charm.unit.status, ops.BlockedStatus)
         mock_reload_config.assert_called_once()
 
     @patch("configchangesocket.ConfigChangeSocketClient.get_controller_agent_id")
@@ -523,7 +523,7 @@ class TestCharm(unittest.TestCase):
         self.assertEqual(json.loads(app_data["db-bind-addresses"]), exp)
 
         harness.evaluate_status()
-        self.assertIsInstance(harness.charm.unit.status, ActiveStatus)
+        self.assertIsInstance(harness.charm.unit.status, ops.ActiveStatus)
 
 
 class MockNetwork:
