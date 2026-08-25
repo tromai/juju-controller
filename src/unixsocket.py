@@ -142,8 +142,8 @@ class _UnixSocketHandler(urllib.request.AbstractHTTPHandler):
     def http_open(self, req: urllib.request.Request):
         """Override http_open to use a Unix socket connection (instead of TCP)."""
         return self.do_open(
-            _UnixSocketConnection,
-            req,  # type: ignore
+            _UnixSocketConnection,  # type: ignore
+            req,
             socket_path=self.socket_path,
         )
 

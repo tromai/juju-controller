@@ -21,6 +21,7 @@ from ops.model import ActiveStatus, BlockedStatus, Relation
 
 import configchangesocket
 import controlsocket
+from unixsocket import APIError
 
 logger = logging.getLogger(__name__)
 
@@ -228,14 +229,14 @@ class JujuControllerCharm(CharmBase):
     def _remove_metrics_user(self, username):
         try:
             self._control_socket.remove_metrics_user(username)
-        except controlsocket.APIError as e:
+        except APIError as e:
             if e.code != 404:
                 raise
 
     def _ensure_metrics_user(self, username, password):
         try:
             self._control_socket.add_metrics_user(username, password)
-        except controlsocket.APIError as e:
+        except APIError as e:
             if e.code != 409:
                 raise
             self._remove_metrics_user(username)
