@@ -182,6 +182,25 @@ jobs:
         channel: "1.36-strict/stable"
         addons: '["dns", "hostpath-storage"]'
 
+    - name: Download packed charm
+      id: download
+      uses: actions/download-artifact@v4
+      with:
+        name: charm
+        path: charm
+
+    - name: Resolve charm path
+      id: charm-path
+      run: |
+        set -eux
+        CHARM_FILE="$(find charm -name '*.charm' -type f | head -n 1)"
+        if [[ -z "$CHARM_FILE" ]]; then
+          echo "No .charm file found in charm/"
+          ls -la charm
+          exit 1
+        fi
+        echo "charm-path=$CHARM_FILE" >> "$GITHUB_OUTPUT"
+
     - name: Install Juju
       run: |
         sudo snap install juju --channel 4.0/stable
@@ -191,14 +210,14 @@ jobs:
       run: |
         juju bootstrap lxd c \
           --bootstrap-base=${{ matrix.bootstrap_base }} \
-          --controller-charm-channel=${{ needs.channel.outputs.test }}
+          --controller-charm-path="${{ steps.charm-path.outputs.charm-path }}"
 
     - name: Bootstrap on MicroK8s
       if: matrix.cloud == 'microk8s'
       run: |
         sg snap_microk8s <<EOF
           juju bootstrap microk8s c \
-            --controller-charm-channel=${{ needs.channel.outputs.test }}
+            --controller-charm-path="${{ steps.charm-path.outputs.charm-path }}"
         EOF
 
     - name: Check charm status
