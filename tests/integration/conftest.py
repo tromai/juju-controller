@@ -76,13 +76,17 @@ def _find_charm_path() -> str:
 
 
 @pytest.fixture(scope="session")
-def controller() -> Iterator[jubilant.Juju]:
+def controller(request: pytest.FixtureRequest) -> Iterator[jubilant.Juju]:
     """Bootstrap a Juju controller running this repo's packed juju-controller charm.
 
     Runs once for the whole test session; every test module reuses this same
     controller. `Juju.bootstrap()` has no `controller_charm_path` parameter, so
     the bootstrap itself goes through `Juju.cli()` directly; everything else
     uses the typed Jubilant API.
+
+    If any test in the session failed, the controller model's `juju
+    debug-log` is printed before teardown, so CI logs show what the
+    controller was actually doing when things went wrong.
     """
     charm_path = _find_charm_path()
     cloud = os.environ.get(_CLOUD_ENV, _DEFAULT_CLOUD)
@@ -106,6 +110,10 @@ def controller() -> Iterator[jubilant.Juju]:
     juju.wait(lambda status: jubilant.all_active(status, "controller"), timeout=600)
 
     yield juju
+
+    if request.session.testsfailed:
+        log = juju.debug_log(limit=1000)
+        print(log, end="")
 
     if not os.environ.get(_KEEP_CONTROLLER_ENV):
         juju.cli(
