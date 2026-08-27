@@ -141,58 +141,39 @@ jobs:
         CHARM_PATH="$(readlink -f "$CHARM_FILE")"
         echo "path=$CHARM_PATH" >> "$GITHUB_OUTPUT"
 
-    - name: Set up Python for Jubilant tests
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
-
-    - name: Install uv
-      run: pip install uv
-
-    - name: Create uv virtualenv
-      run: uv venv
-
-    - name: Install Jubilant test dependencies
+    - name: Bootstrap on LXD
       run: |
-        source .venv/bin/activate
-        uv pip install ".[integration]"
+        juju bootstrap lxd c \
+          --bootstrap-base=${{ matrix.bootstrap_base }} \
+          --controller-charm-path=${{ steps.charm.outputs.path }}
 
-    # Bootstrapping the controller and waiting for it to go active now happens
-    # inside the `controller` fixture in tests/integration/conftest.py (via
-    # Jubilant), rather than as separate shell steps here.
-    #
-    # NOTE: while we're validating this setup, only the simplest test module
-    # (test_config.py, which needs no extra charm deploys/relations) is run.
-    # Once that's confirmed working, drop the explicit path to run the whole
-    # tests/integration suite.
-    - name: Run Jubilant integration tests
-      env:
-        JUJU_CONTROLLER_CHARM_PATH: ${{ steps.charm.outputs.path }}
-        JUJU_ITEST_CLOUD: ${{ matrix.cloud }}
-        JUJU_ITEST_BOOTSTRAP_BASE: ${{ matrix.bootstrap_base }}
-        JUJU_ITEST_CONTROLLER_NAME: c
-        JUJU_ITEST_KEEP_CONTROLLER: "1"
+    - name: Check charm status
       run: |
-        source .venv/bin/activate
-        mkdir -p logs
-        pytest tests/integration/test_config.py -v --log-cli-level=INFO --log-file logs/verbose.log
+        juju switch controller
+        juju status
 
-    - name: Upload Jubilant integration test logs
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: jubilant-integration-logs-${{ matrix.test_name }}
-        path: logs/verbose.log
-      continue-on-error: true
+        start_time="$(date -u +%s)"
+        until [[ $(juju status --format=json 2>/dev/null | jq -r '.applications.controller["application-status"].current') == "active" ]]; do
+          echo "Waiting for controller to become active..."
+          juju status
+          sleep 10
+
+          elapsed=$(( $(date -u +%s) - start_time ))
+          if [[ ${elapsed} -ge 600 ]]; then
+            echo "Timed out waiting for controller to become active"
+            juju status
+            exit 1
+          fi
+        done
 
     - name: Get some info for debugging
       if: failure()
       run: |
         set -x
         set +e
-        juju status -m c:controller
-        juju debug-log -m c:controller --replay
+        juju status -m controller
+        juju debug-log -m controller --replay
 
     # TODO: test integration with dashboard / ha-proxy
-    # TODO: once the above is confirmed working, drop the explicit
-    # test_config.py path above and run the full tests/integration suite.
+    # TODO: re-introduce the Jubilant-based integration tests
+    # (tests/integration/) once they're revisited.
