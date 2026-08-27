@@ -95,3 +95,42 @@ charm-libs:
     version: "0"
   - lib: loki_k8s.loki_push_api
     version: "1"
+
+config:
+  options:
+    controller-url:
+      default: ""
+      description: The URL used to access the controller API.
+      type: string
+    identity-provider-url:
+      default: ""
+      description: The URL used to access an external identity provider.
+      type: string
+    is-juju:
+      default: true
+      description: Whether this is a standalone Juju controller
+      type: boolean
+    workload-tracing-stack-traces:
+      default: false
+      description: Whether stack traces should be added per workload tracing span.
+      type: boolean
+    workload-tracing-sample-ratio:
+      default: 0.1
+      description: The workload tracing sampling ratio (must be between 0 and 1).
+      type: float
+    workload-tracing-tail-sampling-threshold:
+      default: "1ms"
+      description: The workload tracing tail sampling threshold as a duration string.
+      type: string
+    workload-tracing-insecure-skip-verify:
+      default: false
+      description: Whether workload tracing should skip TLS certificate verification.
+      type: boolean
+    loki-insecure-skip-verify:
+      default: false
+      description: Whether Loki should skip TLS certificate verification.
+      type: boolean
+    loki-org-id:
+      default: ""
+      description: The Loki organization ID to use when pushing logs.
+      type: string
