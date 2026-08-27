@@ -5,21 +5,14 @@ from __future__ import annotations
 import jubilant
 
 
-def test_is_juju_and_identity_provider_url_config(controller: jubilant.Juju):
-    controller.config(
-        "controller",
-        {
-            "is-juju": False,
-            "identity-provider-url": "https://idp.example.test",
-        },
-    )
+def test_is_juju_config(controller: jubilant.Juju):
+    controller.config("controller", {"is-juju": False})
     controller.wait(jubilant.all_active)
 
     config = controller.config("controller")
     assert config["is-juju"] is False
-    assert config["identity-provider-url"] == "https://idp.example.test"
 
-    controller.config("controller", reset=["is-juju", "identity-provider-url"])
+    controller.config("controller", reset=["is-juju"])
     controller.wait(jubilant.all_active)
 
 

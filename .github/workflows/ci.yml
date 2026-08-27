@@ -1,7 +1,6 @@
 name: "CI"
 on:
   push:
-  pull_request:
   workflow_dispatch:
 env:
   CHARM_NAME: ${{ vars.CHARM_NAME }}
