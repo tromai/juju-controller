@@ -1,10 +1,17 @@
 name: juju-controller
+title: Juju Controller Charm
 description: |
   The Juju controller charm is used to expose various pieces
   of functionality of a Juju controller.
 summary: |
   The Juju controller.
 type: charm
+
+links:
+  issues:
+    - https://github.com/juju/juju-controller/issues
+  source:
+    - https://github.com/juju/juju-controller
 
 assumes:
 - juju >= 4.1
