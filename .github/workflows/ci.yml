@@ -91,8 +91,13 @@ jobs:
           - test_name: lxd-26.04
             cloud: lxd
             bootstrap_base: ubuntu@26.04
-          - test_name: microk8s
-            cloud: microk8s
+    # NOTE: microk8s is intentionally excluded for now. Juju rejects
+    # --controller-charm-path on k8s clouds unless it's a Charmhub reference
+    # (ch:...); a local .charm path is hard-rejected with "deploying a local
+    # controller charm on a k8s controller not supported". Since this fork
+    # has no Charmhub upload credentials, there's no way to exercise the
+    # microk8s bootstrap path here. See juju/juju#14586 for the origin of
+    # this restriction.
 
     steps:
     - name: Checkout code
@@ -113,15 +118,7 @@ jobs:
       continue-on-error: true
 
     - name: Setup LXD
-      if: matrix.cloud == 'lxd'
       uses: canonical/setup-lxd@2fa6235ef2dfd3288e0de09edac03f2ebf922968
-
-    - name: Set up MicroK8s
-      if: matrix.cloud == 'microk8s'
-      uses: balchua/microk8s-actions@v0.4.2
-      with:
-        channel: "1.36-strict/stable"
-        addons: '["dns", "hostpath-storage"]'
 
     - name: Install Juju
       run: |
@@ -129,8 +126,20 @@ jobs:
 
     - name: Find packed charm path
       id: charm
+      # The build job packs one .charm per platform declared in
+      # charmcraft.yaml (e.g. juju-controller_ubuntu@22.04-amd64.charm). Pick
+      # the file matching *this* matrix job's base, instead of just grabbing
+      # the alphabetically-first .charm file (which would silently bootstrap
+      # every base with the 22.04 build).
       run: |
-        CHARM_PATH="$(readlink -f "$(ls -1 *.charm | head -n1)")"
+        BASE="${{ matrix.bootstrap_base }}"
+        CHARM_FILE="$(ls -1 juju-controller_${BASE}-*.charm | head -n1)"
+        if [[ -z "$CHARM_FILE" ]]; then
+          echo "No packed charm found for base ${BASE}" >&2
+          ls -1 *.charm >&2 || true
+          exit 1
+        fi
+        CHARM_PATH="$(readlink -f "$CHARM_FILE")"
         echo "path=$CHARM_PATH" >> "$GITHUB_OUTPUT"
 
     - name: Set up Python for Jubilant tests
@@ -167,11 +176,7 @@ jobs:
       run: |
         source .venv/bin/activate
         mkdir -p logs
-        if [[ "${{ matrix.cloud }}" == "microk8s" ]]; then
-          sg snap_microk8s -c "pytest tests/integration/test_config.py -v --log-cli-level=INFO --log-file logs/verbose.log"
-        else
-          pytest tests/integration/test_config.py -v --log-cli-level=INFO --log-file logs/verbose.log
-        fi
+        pytest tests/integration/test_config.py -v --log-cli-level=INFO --log-file logs/verbose.log
 
     - name: Upload Jubilant integration test logs
       if: always()
@@ -188,12 +193,6 @@ jobs:
         set +e
         juju status -m c:controller
         juju debug-log -m c:controller --replay
-        if [[ "${{ matrix.cloud }}" == "microk8s" ]]; then
-          sg snap_microk8s <<EOF
-            microk8s.kubectl -n controller-c get all
-            microk8s.kubectl -n controller-c get -o yaml pod/controller-0
-          EOF
-        fi
 
     # TODO: test integration with dashboard / ha-proxy
     # TODO: once the above is confirmed working, drop the explicit
