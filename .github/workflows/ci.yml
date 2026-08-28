@@ -176,16 +176,7 @@ jobs:
 
     - name: Run integration tests
       run: |
-        set -x
-        set +e
-        juju status -m controller
-        juju debug-log -m controller --replay
-        if [[ "${{ matrix.cloud }}" == "microk8s" ]]; then
-          sg snap_microk8s <<EOF
-            microk8s.kubectl -n controller-c get all
-            microk8s.kubectl -n controller-c get -o yaml pod/controller-0
-        EOF
-        fi
+        uv run --extra integration pytest tests/integration/test_smoke.py -vv --log-cli-level=INFO
 
     # TODO: test integration with dashboard / ha-proxy
     # TODO: re-introduce the Jubilant-based integration tests

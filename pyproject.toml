@@ -15,6 +15,7 @@ dev = [
 integration = [
     "jubilant",
     "pytest",
+    "pytest-jubilant",
     "pyyaml",
 ]
 
