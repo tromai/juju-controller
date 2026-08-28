@@ -90,13 +90,18 @@ jobs:
           - test_name: lxd-26.04
             cloud: lxd
             bootstrap_base: ubuntu@26.04
-    # NOTE: microk8s is intentionally excluded for now. Juju rejects
-    # --controller-charm-path on k8s clouds unless it's a Charmhub reference
-    # (ch:...); a local .charm path is hard-rejected with "deploying a local
-    # controller charm on a k8s controller not supported". Since this fork
-    # has no Charmhub upload credentials, there's no way to exercise the
-    # microk8s bootstrap path here. See juju/juju#14586 for the origin of
-    # this restriction.
+          - test_name: microk8s
+            cloud: microk8s
+            # CAAS bootstrap rejects --bootstrap-base entirely (it's an
+            # IAAS-only flag), so this is only used below to pick which
+            # packed charm artifact to upload, not passed to `juju bootstrap`.
+            bootstrap_base: ubuntu@24.04
+    # NOTE: local --controller-charm-path used to be hard-rejected on k8s
+    # clouds ( "deploying a local controller charm on a k8s controller not
+    # supported", see juju/juju#14586). That restriction was lifted by
+    # juju/juju#22795 ("feat: bootstrap controller charm on CAAS"), which
+    # landed after the 4.1-beta1 build. We install Juju from 4.1/edge below
+    # to pick up that fix.
 
     steps:
     - name: Checkout code
@@ -117,11 +122,22 @@ jobs:
       continue-on-error: true
 
     - name: Setup LXD
+      if: matrix.cloud == 'lxd'
       uses: canonical/setup-lxd@2fa6235ef2dfd3288e0de09edac03f2ebf922968
 
+    - name: Set up MicroK8s
+      if: matrix.cloud == 'microk8s'
+      uses: balchua/microk8s-actions@65ff1f88f8ecd153879a9b6955659f3144b27714 # v0.4.2
+      with:
+        channel: "1.36-strict/stable"
+        addons: '["dns", "hostpath-storage"]'
+
     - name: Install Juju
+      # 4.1/beta is 4.1-beta1 (2026-05-01), which predates juju/juju#22795
+      # (merged after that build) that allows a local --controller-charm-path
+      # on k8s controllers. Use 4.1/edge to get that fix.
       run: |
-        sudo snap install juju --channel 4.1/beta
+        sudo snap install juju --channel 4.1/edge
 
     - name: Find packed charm path
       id: charm
@@ -142,10 +158,18 @@ jobs:
         echo "path=$CHARM_PATH" >> "$GITHUB_OUTPUT"
 
     - name: Bootstrap on LXD
+      if: matrix.cloud == 'lxd'
       run: |
         juju bootstrap lxd c \
           --bootstrap-base=${{ matrix.bootstrap_base }} \
           --controller-charm-path=${{ steps.charm.outputs.path }}
+
+    - name: Bootstrap on MicroK8s
+      if: matrix.cloud == 'microk8s'
+      # --bootstrap-base is IAAS-only and is rejected outright on CAAS
+      # clouds, so it's deliberately omitted here.
+      run: |
+        sg snap_microk8s -c "juju bootstrap microk8s c --controller-charm-path=${{ steps.charm.outputs.path }}"
 
     - name: Check charm status
       run: |
@@ -173,6 +197,12 @@ jobs:
         set +e
         juju status -m controller
         juju debug-log -m controller --replay
+        if [[ "${{ matrix.cloud }}" == "microk8s" ]]; then
+          sg snap_microk8s <<EOF
+            microk8s.kubectl -n controller-c get all
+            microk8s.kubectl -n controller-c get -o yaml pod/controller-0
+        EOF
+        fi
 
     # TODO: test integration with dashboard / ha-proxy
     # TODO: re-introduce the Jubilant-based integration tests
