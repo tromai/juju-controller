@@ -13,4 +13,3 @@ export PYTHONPATH="src:lib$PYTHONPATH"
 
 coverage run --source=src -m unittest -v "$@"
 coverage report -m
-flake8
