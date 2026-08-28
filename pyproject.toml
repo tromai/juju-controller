@@ -11,5 +11,4 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "coverage",
-    "flake8",
 ]
