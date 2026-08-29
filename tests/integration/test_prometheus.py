@@ -15,8 +15,10 @@ Bash function being ported:
 
         juju remove-relation prometheus-k8s controller
         retry 'check_prometheus_no_target prometheus-k8s 0' 30
-        juju status -m controller --format json | yq -r "$(active_condition "controller")" | check "controller"
-        juju status --format json | yq -r "$(active_condition "prometheus-k8s")" | check "prometheus-k8s"
+        juju status -m controller --format json | yq -r "$(active_condition "controller")"
+        | check "controller"
+        juju status --format json | yq -r "$(active_condition "prometheus-k8s")"
+        | check "prometheus-k8s"
 
         juju remove-application prometheus-k8s --destroy-storage --no-prompt \
             --force --no-wait
@@ -53,7 +55,6 @@ Run with::
 from __future__ import annotations
 
 import json
-import os
 from typing import Any
 
 import jubilant
@@ -112,8 +113,7 @@ def _controller_target_present(juju: jubilant.Juju, expected: bool) -> bool:
 
     targets = payload.get('data', {}).get('activeTargets', []) or []
     has_target = any(
-        tgt.get('labels', {}).get('juju_application') == 'controller'
-        and tgt.get('health') == 'up'
+        tgt.get('labels', {}).get('juju_application') == 'controller' and tgt.get('health') == 'up'
         for tgt in targets
     )
     return has_target == expected
