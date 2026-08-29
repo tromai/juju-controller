@@ -169,6 +169,7 @@ def test_run_prometheus(
 ) -> None:
     """Direct port of `run_prometheus` from prometheus.sh."""
     juju = prom_model
+    juju.deploy("prometheus-k8s", channel="1/stable", trust=True)
     juju.offer(
         'controller.controller',
         endpoint='metrics-endpoint',
