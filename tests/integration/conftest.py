@@ -1,36 +1,22 @@
 """Fixtures and helpers for Jubilant-based integration tests.
 
-The `controller` fixture below bootstraps a real Juju controller using this
-repo's packed juju-controller charm (via `--controller-charm-path`), once per
-test session, and every test module reuses that same controller. This mirrors
-`.github/workflows/ci.yml`, which now just installs Juju and hands off to
-`pytest` -- there's no separate bootstrap/status-check shell step anymore.
-
-Locally, you can run the whole thing with:
+Unlike an earlier version of this file, these tests **assume a Juju
+controller has already been bootstrapped** and is running this repo's
+juju-controller charm in its `controller` model (see `test_config.py` /
+`test_smoke.py` for the simplest examples: they just do
+`jubilant.Juju(model="controller")` and go). Nothing here bootstraps or
+destroys a controller -- do that yourself first, for example:
 
     charmcraft pack
+    juju bootstrap lxd juju-controller-itest \\
+        --controller-charm-path=./juju-controller_*.charm
     pip install jubilant pytest pyyaml
     pytest tests/integration -v
 
-That will pack-discover `./juju-controller_*.charm`, bootstrap an LXD
-controller named `juju-controller-itest`, wait for it to go active, run the
-tests, then destroy the controller. Configure via environment variables:
-
-  - JUJU_CONTROLLER_CHARM_PATH: path to the packed .charm file (default:
-    autodetect a single `juju-controller_*.charm` in the repo root).
-  - JUJU_ITEST_CLOUD: cloud to bootstrap on (default: "lxd").
-  - JUJU_ITEST_BOOTSTRAP_BASE: value for `--bootstrap-base` (optional).
-  - JUJU_ITEST_CONTROLLER_NAME: controller name (default:
-    "juju-controller-itest").
-  - JUJU_ITEST_KEEP_CONTROLLER: if set (to anything non-empty), don't destroy
-    the controller after the test session -- useful for local debugging, and
-    used in CI since the runner is thrown away anyway.
-
-Some tests (metrics-endpoint, charm/workload tracing, loki-push-api) need a
-provider charm that only ships for Kubernetes (prometheus-k8s,
-tempo-coordinator-k8s, loki-k8s). Those tests are cross-model/cross-controller
-and are skipped unless you point them at an existing microk8s controller via
-the JUJU_ITEST_K8S_MODEL environment variable, for example:
+Some tests (`test_prometheus.py`) need a provider charm that only ships for
+Kubernetes (`prometheus-k8s`). Those tests are cross-model/cross-controller
+and are skipped unless you point them at an existing k8s controller/model
+via the JUJU_ITEST_K8S_MODEL environment variable, for example:
 
     microk8s status --wait-ready
     juju bootstrap microk8s itest-k8s
@@ -41,100 +27,35 @@ the JUJU_ITEST_K8S_MODEL environment variable, for example:
 
 from __future__ import annotations
 
-import glob
+import json
 import os
-import pathlib
-from collections.abc import Iterator
+import time
+import urllib.request
+from collections.abc import Callable
 
 import jubilant
 import pytest
 
-_CHARM_PATH_ENV = "JUJU_CONTROLLER_CHARM_PATH"
-_CLOUD_ENV = "JUJU_ITEST_CLOUD"
-_BOOTSTRAP_BASE_ENV = "JUJU_ITEST_BOOTSTRAP_BASE"
-_CONTROLLER_NAME_ENV = "JUJU_ITEST_CONTROLLER_NAME"
-_KEEP_CONTROLLER_ENV = "JUJU_ITEST_KEEP_CONTROLLER"
-
-_DEFAULT_CLOUD = "lxd"
-_DEFAULT_CONTROLLER_NAME = "juju-controller-itest"
-
-
-def _find_charm_path() -> str:
-    """Resolve the packed juju-controller .charm to bootstrap with."""
-    env_path = os.environ.get(_CHARM_PATH_ENV)
-    if env_path:
-        return str(pathlib.Path(env_path).resolve())
-
-    charms = sorted(glob.glob("juju-controller_*.charm"))
-    if not charms:
-        pytest.fail(
-            "No packed juju-controller charm found in the repo root. Run "
-            "`charmcraft pack` first, or set JUJU_CONTROLLER_CHARM_PATH to the "
-            ".charm file path."
-        )
-    return str(pathlib.Path(charms[0]).resolve())
-
 
 @pytest.fixture(scope="session")
-def controller(request: pytest.FixtureRequest) -> Iterator[jubilant.Juju]:
-    """Bootstrap a Juju controller running this repo's packed juju-controller charm.
+def controller() -> jubilant.Juju:
+    """Return a Juju client for the already-bootstrapped controller model.
 
-    Runs once for the whole test session; every test module reuses this same
-    controller. `Juju.bootstrap()` has no `controller_charm_path` parameter, so
-    the bootstrap itself goes through `Juju.cli()` directly; everything else
-    uses the typed Jubilant API.
-
-    If any test in the session failed, the controller model's `juju
-    debug-log` is printed before teardown, so CI logs show what the
-    controller was actually doing when things went wrong.
+    This assumes a Juju controller running this repo's juju-controller
+    charm has already been bootstrapped (see the module docstring above) --
+    it does not bootstrap or destroy anything itself.
     """
-    charm_path = _find_charm_path()
-    cloud = os.environ.get(_CLOUD_ENV, _DEFAULT_CLOUD)
-    bootstrap_base = os.environ.get(_BOOTSTRAP_BASE_ENV)
-    controller_name = os.environ.get(_CONTROLLER_NAME_ENV, _DEFAULT_CONTROLLER_NAME)
-
-    juju = jubilant.Juju()
-
-    bootstrap_args = [
-        "bootstrap",
-        cloud,
-        controller_name,
-        "--controller-charm-path",
-        charm_path,
-    ]
-    if bootstrap_base:
-        bootstrap_args.extend(["--bootstrap-base", bootstrap_base])
-    juju.cli(*bootstrap_args, include_model=False)
-
-    juju.model = f"{controller_name}:controller"
-    juju.wait(lambda status: jubilant.all_active(status, "controller"), timeout=600)
-
-    yield juju
-
-    if request.session.testsfailed:
-        log = juju.debug_log(limit=1000)
-        print(log, end="")
-
-    if not os.environ.get(_KEEP_CONTROLLER_ENV):
-        juju.cli(
-            "destroy-controller",
-            controller_name,
-            "--destroy-all-models",
-            "--no-prompt",
-            "-y",
-            include_model=False,
-        )
+    return jubilant.Juju(model="controller")
 
 
 @pytest.fixture(scope="session")
 def k8s_juju() -> jubilant.Juju:
     """Return a Juju client for a pre-existing Kubernetes model.
 
-    Used by tests that need a k8s-only COS charm (prometheus-k8s,
-    tempo-coordinator-k8s, loki-k8s) related cross-model/cross-controller to
-    the (machine-based) controller model. Skips if JUJU_ITEST_K8S_MODEL isn't
-    set, since we can't safely bootstrap a whole second controller as a test
-    fixture.
+    Used by tests that need a k8s-only COS charm (prometheus-k8s) related
+    cross-model/cross-controller to the (machine-based) controller model.
+    Skips if JUJU_ITEST_K8S_MODEL isn't set, since we can't safely bootstrap
+    a whole second controller as a test fixture.
     """
     model = os.environ.get("JUJU_ITEST_K8S_MODEL")
     if not model:
@@ -143,6 +64,37 @@ def k8s_juju() -> jubilant.Juju:
             "controller/model) to run the cross-model COS tests."
         )
     return jubilant.Juju(model=model)
+
+
+# --- Cross-model offer/consume/integrate helpers -----------------------------
+#
+# These mirror what `juju offer` / `juju consume` / `juju integrate` do across
+# controllers, as shown in the README for relating juju-dashboard via a
+# cross-model integration. They're split into separate offer/consume/integrate
+# steps (rather than one do-it-all call) so that a single offer can be
+# consumed once and then integrated with *multiple* local applications, which
+# is what the upstream `run_prometheus_multiple_units` test does (one
+# `juju offer`, two separate `juju relate`s to it).
+
+
+def cross_model_offer(
+    *, offerer: jubilant.Juju, offerer_app: str, offerer_endpoint: str, offer_name: str
+) -> None:
+    """Offer an endpoint from one controller/model for cross-model consumption."""
+    offerer.offer(offerer_app, endpoint=offerer_endpoint, name=offer_name)
+
+
+def cross_model_consume(
+    *, offerer: jubilant.Juju, offer_name: str, consumer: jubilant.Juju, alias: str
+) -> None:
+    """Consume a previously-created offer into another controller/model."""
+    model_info = offerer.show_model()
+    consumer.consume(
+        f"{model_info.short_name}.{offer_name}",
+        alias,
+        controller=model_info.controller_name,
+        owner="admin",
+    )
 
 
 def cross_model_integrate(
@@ -155,21 +107,34 @@ def cross_model_integrate(
     consumer_app: str,
     alias: str,
 ) -> None:
-    """Offer an endpoint from one controller/model and consume+integrate it from another.
+    """Offer an endpoint from one controller/model, consume it, and integrate it.
 
-    This mirrors what `juju offer` / `juju consume` / `juju integrate` do across
-    controllers, as shown in the README for relating juju-dashboard via a
-    cross-model integration.
+    Convenience wrapper around `cross_model_offer` + `cross_model_consume` +
+    `Juju.integrate` for the common case of a single offerer and a single
+    consuming application.
     """
-    offerer.offer(offerer_app, endpoint=offerer_endpoint, name=offer_name)
-    model_info = offerer.show_model()
-    consumer.consume(
-        f"{model_info.short_name}.{offer_name}",
-        alias,
-        controller=model_info.controller_name,
-        owner="admin",
+    cross_model_offer(
+        offerer=offerer,
+        offerer_app=offerer_app,
+        offerer_endpoint=offerer_endpoint,
+        offer_name=offer_name,
     )
+    cross_model_consume(offerer=offerer, offer_name=offer_name, consumer=consumer, alias=alias)
     consumer.integrate(consumer_app, alias)
+
+
+def remove_cross_model_offer(*, offerer: jubilant.Juju, offer_name: str) -> None:
+    """Best-effort removal of a cross-model offer."""
+    try:
+        model_info = offerer.show_model()
+        offerer.cli(
+            "remove-offer",
+            f"admin/{model_info.short_name}.{offer_name}",
+            "-y",
+            include_model=False,
+        )
+    except jubilant.CLIError:
+        pass
 
 
 def cross_model_teardown(
@@ -189,13 +154,76 @@ def cross_model_teardown(
         consumer.remove_application(alias)
     except jubilant.CLIError:
         pass
-    try:
-        model_info = offerer.show_model()
-        offerer.cli(
-            "remove-offer",
-            f"admin/{model_info.short_name}.{offer_name}",
-            "-y",
-            include_model=False,
-        )
-    except jubilant.CLIError:
-        pass
+    remove_cross_model_offer(offerer=offerer, offer_name=offer_name)
+
+
+# --- Prometheus targets-API helpers ------------------------------------------
+#
+# These mirror the `get_juju_target` / `check_prometheus_targets` /
+# `check_prometheus_no_target` bash functions in juju/juju's
+# `tests/suites/controllercharm/prometheus.sh`: they talk to a Prometheus
+# unit's HTTP API directly (there's no way to observe the effect of the
+# controller charm's `add_metrics_user`/`MetricsEndpointProvider` calls
+# purely through `juju status`).
+
+
+def _prometheus_targets(address: str) -> list[dict]:
+    """Fetch the list of active scrape targets from a Prometheus unit's HTTP API."""
+    url = f"http://{address}:9090/api/v1/targets"
+    with urllib.request.urlopen(url, timeout=5) as resp:  # noqa: S310
+        data = json.load(resp)
+    return data["data"]["activeTargets"]
+
+
+def _find_target(address: str, app_name: str) -> dict | None:
+    """Return the Prometheus scrape target for `app_name`, if present."""
+    for target in _prometheus_targets(address):
+        if target.get("labels", {}).get("juju_application") == app_name:
+            return target
+    return None
+
+
+def retry(
+    condition: Callable[[], bool],
+    *,
+    attempts: int = 30,
+    delay: float = 2.0,
+) -> None:
+    """Call `condition()` repeatedly until it returns true.
+
+    Mirrors the upstream `retry` bash helper (`retry '<command>' 30`) used
+    throughout the juju/juju test suites.
+
+    Raises AssertionError if `condition` never returns true within `attempts` tries.
+    """
+    for attempt in range(1, attempts + 1):
+        if condition():
+            return
+        if attempt < attempts:
+            time.sleep(delay)
+    raise AssertionError(f"condition {condition!r} not met after {attempts} attempts")
+
+
+def wait_for_prometheus_target_up(
+    address: str, *, app_name: str = "controller", attempts: int = 30, delay: float = 2.0
+) -> None:
+    """Poll a Prometheus unit's targets API until `app_name` is an "up" scrape target.
+
+    Equivalent of the upstream `retry 'check_prometheus_targets <app> <unit>' 30`.
+    """
+
+    def check() -> bool:
+        target = _find_target(address, app_name)
+        return target is not None and target.get("health") == "up"
+
+    retry(check, attempts=attempts, delay=delay)
+
+
+def wait_for_prometheus_target_gone(
+    address: str, *, app_name: str = "controller", attempts: int = 30, delay: float = 2.0
+) -> None:
+    """Poll until `app_name` is no longer present in a Prometheus unit's scrape targets.
+
+    Equivalent of the upstream `retry 'check_prometheus_no_target <app> <unit>' 30`.
+    """
+    retry(lambda: _find_target(address, app_name) is None, attempts=attempts, delay=delay)

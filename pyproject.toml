@@ -23,6 +23,10 @@ integration = [
 # Configure Jubilant logs for integration tests, following:
 # https://canonical.com/juju/docs/ops/latest/howto/write-integration-tests-for-a-charm/#configure-jubilant-logs
 [tool.pytest.ini_options]
+markers = [
+    "prometheus: needs a Kubernetes cloud to deploy prometheus-k8s into (e.g. microk8s)",
+]
+
 log_cli_format = "%(levelname)s %(name)s %(message)s"
 
 log_file_format = "%(asctime)s %(levelname)s %(name)s %(message)s"

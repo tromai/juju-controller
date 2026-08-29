@@ -175,8 +175,16 @@ jobs:
       uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
 
     - name: Run integration tests
+      # test_prometheus.py is marked `prometheus` because it needs a
+      # Kubernetes cloud to deploy prometheus-k8s into. Only microk8s
+      # provides that here, so deselect the marker on every other cloud via
+      # pytest's `-m` option instead of maintaining two separate steps.
       run: |
-        uv run --extra integration pytest tests/integration/test_smoke.py -vv --log-cli-level=INFO
+        MARKEXPR="not prometheus"
+        if [ "${{ matrix.cloud }}" = "microk8s" ]; then
+          MARKEXPR=""
+        fi
+        uv run --extra integration pytest tests/integration/ -vv --log-cli-level=INFO ${MARKEXPR:+-m "$MARKEXPR"}
 
     # TODO: test integration with dashboard / ha-proxy
     # TODO: re-introduce the Jubilant-based integration tests
