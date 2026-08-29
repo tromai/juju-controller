@@ -159,6 +159,12 @@ def prom_model(
     return juju_factory.get_juju(suffix='prometheus')
 
 
+@pytest.fixture(scope='module')
+def controller_model() -> jubilant.Juju:
+    # We assume the controller model is always there.
+    return jubilant.Juju(model='controller')
+
+
 # ---------------------------------------------------------------------------
 # The ported test
 # ---------------------------------------------------------------------------
@@ -166,6 +172,7 @@ def prom_model(
 @pytest.mark.prometheus
 def test_run_prometheus(
     prom_model: jubilant.Juju,
+    controller_model: jubilant.Juju,
 ) -> None:
     """Direct port of `run_prometheus` from prometheus.sh."""
     juju = prom_model
@@ -186,40 +193,23 @@ def test_run_prometheus(
 
     wait_for_controller_target(juju, expected=False)
 
-    # # ---- Health-check controller charm and prometheus-k8s are still active.
-    # # Equivalent to:
-    # #     juju status -m controller --format json | yq -r "$(active_condition \
-    # #         "controller")" | check "controller"
-    # #     juju status --format json | yq -r "$(active_condition \
-    # #         "prometheus-k8s")" | check "prometheus-k8s"
-    # # `jubilant.all_active(status, name)` checks the application and all its
-    # # units, which is the same predicate the bash `active_condition` helper
-    # # encodes (it emits the app name iff application-status.current == active).
-    # controller_status = juju_controller_model.wait(
-    #     lambda status: jubilant.all_active(status, 'controller'),
-    #     error=jubilant.any_error,
-    # )
-    # assert controller_status.apps['controller'].is_active
+    controller_model.wait(
+        lambda status: jubilant.all_active(status, 'controller'),
+        error=jubilant.any_error,
+    )
 
-    # prom_status = juju.wait(
-    #     lambda status: jubilant.all_active(status, 'prometheus-k8s'),
-    #     error=jubilant.any_error,
-    # )
-    # assert prom_status.apps['prometheus-k8s'].is_active
+    juju.wait(
+        lambda status: jubilant.all_active(status, 'prometheus-k8s'),
+        error=jubilant.any_error,
+    )
 
-    # # ---- Remove prometheus-k8s with destroy-storage, no-wait, force.
-    # # Equivalent to:
-    # #     juju remove-application prometheus-k8s --destroy-storage --no-prompt \
-    # #         --force --no-wait
-    # # Juju.remove_application covers --destroy-storage/--no-prompt/--force but
-    # # not --no-wait. For full parity with the bash flags we drop into Juju.cli.
-    # juju.cli(
-    #     'remove-application',
-    #     'prometheus-k8s',
-    #     '--destroy-storage',
-    #     '--no-prompt',
-    #     '--force',
-    #     '--no-wait',
-    # )
-    # # The temp model teardown happens in pytest-jubilant's `juju_factory`
-    # # fixture. The controller itself is left untouched.
+    juju.cli(
+        'remove-application',
+        'prometheus-k8s',
+        '--destroy-storage',
+        '--no-prompt',
+        '--force',
+        '--no-wait',
+    )
+
+    juju.wait(jubilant.all_active)
