@@ -1,18 +1,22 @@
 name: "CI"
 on:
-  push:
   workflow_dispatch:
     inputs:
       ref:
         description: >-
           Branch, tag, or SHA to build and test. Leave empty to test the ref
           this workflow is running from. Use this to test a branch that
-          doesn't have this CI workflow itself (dispatch from a branch that
-          does, e.g. main, and point `ref` at the other branch).
+          doesn't have this CI workflow (or tests/integration/) at all --
+          dispatch from a branch that does (e.g. main) and point `ref` at
+          the other branch. Only unit-tests/build check out this ref; the
+          integration job checks out the workflow's own ref and only
+          consumes the charm artifact built from it (see below).
         required: false
         type: string
 env:
   CHARM_NAME: ${{ vars.CHARM_NAME }}
+  # Ref whose charm code / pyproject.toml / charmcraft.yaml gets built and
+  # unit-tested. NOT used by the integration job -- see its checkout step.
   TEST_REF: ${{ inputs.ref || github.ref }}
 
 jobs:
@@ -22,6 +26,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    # Checks out TEST_REF (the branch under test), not necessarily this
+    # workflow's own ref -- see the workflow_dispatch `ref` input above.
     - name: Checkout code
       uses: actions/checkout@v4
       with:
@@ -53,6 +59,7 @@ jobs:
     needs: unit-tests
     runs-on: ubuntu-latest
     steps:
+      # Same as unit-tests: builds whatever charm code lives at TEST_REF.
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -118,10 +125,15 @@ jobs:
     # to pick up that fix.
 
     steps:
+    # NOTE: deliberately checks out the *workflow's own* ref here, not
+    # ${{ env.TEST_REF }}. This job only needs tests/integration/ and the
+    # `integration` extra in pyproject.toml, which live on the branch this
+    # workflow file itself lives on. The actual charm under test comes
+    # entirely from the `charm` artifact built by the `build` job (from
+    # TEST_REF), so this job never depends on the target branch having any
+    # test files.
     - name: Checkout code
       uses: actions/checkout@v4
-      with:
-        ref: ${{ env.TEST_REF }}
 
     - name: Download packed charm
       id: download
