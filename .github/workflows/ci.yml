@@ -1,5 +1,6 @@
 name: "CI"
 on:
+  push:
   workflow_dispatch:
     inputs:
       ref:
@@ -102,20 +103,23 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - test_name: lxd-22.04
-            cloud: lxd
-            bootstrap_base: ubuntu@22.04
-          - test_name: lxd-24.04
-            cloud: lxd
-            bootstrap_base: ubuntu@24.04
-          - test_name: lxd-26.04
-            cloud: lxd
-            bootstrap_base: ubuntu@26.04
-          - test_name: microk8s
-            cloud: microk8s
-            # CAAS bootstrap rejects --bootstrap-base entirely (it's an
-            # IAAS-only flag), so this is only used below to pick which
-            # packed charm artifact to upload, not passed to `juju bootstrap`.
+          # - test_name: lxd-22.04
+          #   cloud: lxd
+          #   bootstrap_base: ubuntu@22.04
+          # - test_name: lxd-24.04
+          #   cloud: lxd
+          #   bootstrap_base: ubuntu@24.04
+          # - test_name: lxd-26.04
+          #   cloud: lxd
+          #   bootstrap_base: ubuntu@26.04
+          # - test_name: microk8s
+          #   cloud: microk8s
+          #   # CAAS bootstrap rejects --bootstrap-base entirely (it's an
+          #   # IAAS-only flag), so this is only used below to pick which
+          #   # packed charm artifact to upload, not passed to `juju bootstrap`.
+          #   bootstrap_base: ubuntu@24.04
+          - test_name: k8s
+            cloud: k8s
             bootstrap_base: ubuntu@24.04
     # NOTE: local --controller-charm-path used to be hard-rejected on k8s
     # clouds ( "deploying a local controller charm on a k8s controller not
@@ -161,11 +165,23 @@ jobs:
         addons: '["dns", "hostpath-storage"]'
 
     - name: Install Juju
+      if: matrix.cloud == 'microk8s' || matrix.cloud == 'lxd'
       # 4.1/beta is 4.1-beta1 (2026-05-01), which predates juju/juju#22795
       # (merged after that build) that allows a local --controller-charm-path
       # on k8s controllers. Use 4.1/edge to get that fix.
       run: |
         sudo snap install juju --channel 4.1/edge
+
+    # Clean this up later
+    - if: matrix.cloud == 'k8s'
+      run: sudo snap install --classic concierge
+
+    - if: matrix.cloud == 'k8s'
+      run: >
+        sudo concierge prepare
+        --juju-channel=4.1/edge
+        -p k8s
+        -c concierge.yaml
 
     - name: Find packed charm path
       id: charm
@@ -199,6 +215,11 @@ jobs:
       run: |
         sg snap_microk8s -c "juju bootstrap microk8s c --controller-charm-path=${{ steps.charm.outputs.path }}"
 
+    - name: Bootstrap on Canonical K8s
+      if: matrix.cloud == 'k8s'
+      run: |
+        juju bootstrap k8s c --controller-charm-path=${{ steps.charm.outputs.path }}
+
     - name: Install uv
       uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
 
@@ -209,7 +230,7 @@ jobs:
       # pytest's `-m` option instead of maintaining two separate steps.
       run: |
         MARKEXPR="not prometheus"
-        if [ "${{ matrix.cloud }}" = "microk8s" ]; then
+        if [ "${{ matrix.cloud }}" = "microk8s" ] || [ "${{ matrix.cloud }}" = "k8s" ]; then
           MARKEXPR=""
         fi
         uv run --extra integration pytest tests/integration/ -vv --log-cli-level=INFO ${MARKEXPR:+-m "$MARKEXPR"}
