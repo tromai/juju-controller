@@ -180,7 +180,7 @@ jobs:
       run: >
         sudo concierge prepare
         --juju-channel=4.1/edge
-        -c concierge.yaml
+        -c .github/concierge-k8s.yaml
 
     - name: Find packed charm path
       id: charm
