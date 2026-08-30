@@ -96,57 +96,51 @@ def test_run_prometheus_cross_controller(
         alias=CONSUMER_ALIAS,
     )
 
-    try:
-        # ---- Wait for prometheus-k8s/0 to be active+idle and for Prometheus
-        # to have scraped the controller across the controller boundary.
-        # Equivalent to:
-        #     wait_for "prometheus-k8s" "$(active_idle_condition "prometheus-k8s" 0)"
-        #     retry 'check_prometheus_targets prometheus-k8s 0' 30
-        juju.wait(_helpers.is_unit_ready('prometheus-k8s'), error=jubilant.any_error)
-        _helpers.wait_for_controller_target(juju, expected=True)
+    # ---- Wait for prometheus-k8s/0 to be active+idle and for Prometheus
+    # to have scraped the controller across the controller boundary.
+    # Equivalent to:
+    #     wait_for "prometheus-k8s" "$(active_idle_condition "prometheus-k8s" 0)"
+    #     retry 'check_prometheus_targets prometheus-k8s 0' 30
+    juju.wait(_helpers.is_unit_ready('prometheus-k8s'), error=jubilant.any_error)
+    _helpers.wait_for_controller_target(juju, expected=True)
 
-        # ---- Remove the cross-model relation. Equivalent to:
-        #     juju remove-relation prometheus-k8s controller
-        juju.remove_relation('prometheus-k8s', CONSUMER_ALIAS)
+    # ---- Remove the cross-model relation. Equivalent to:
+    #     juju remove-relation prometheus-k8s controller
+    juju.remove_relation('prometheus-k8s', CONSUMER_ALIAS)
 
-        # ---- Wait until Prometheus no longer scrapes the controller, and
-        # check both apps are still active. Equivalent to:
-        #     retry 'check_prometheus_no_target prometheus-k8s 0' 30
-        #     juju status -m controller --format json | yq -r \
-        #         "$(active_condition "controller")" | check "controller"
-        #     juju status --format json | yq -r \
-        #         "$(active_condition "prometheus-k8s")" | check "prometheus-k8s"
-        _helpers.wait_for_controller_target(juju, expected=False)
-        controller.wait(
-            lambda s: jubilant.all_active(s, 'controller'),
-            error=jubilant.any_error,
-        )
-        juju.wait(
-            lambda s: jubilant.all_active(s, 'prometheus-k8s'),
-            error=jubilant.any_error,
-        )
+    # ---- Wait until Prometheus no longer scrapes the controller, and
+    # check both apps are still active. Equivalent to:
+    #     retry 'check_prometheus_no_target prometheus-k8s 0' 30
+    #     juju status -m controller --format json | yq -r \
+    #         "$(active_condition "controller")" | check "controller"
+    #     juju status --format json | yq -r \
+    #         "$(active_condition "prometheus-k8s")" | check "prometheus-k8s"
+    _helpers.wait_for_controller_target(juju, expected=False)
+    controller.wait(
+        lambda s: jubilant.all_active(s, 'controller'),
+        error=jubilant.any_error,
+    )
+    juju.wait(
+        lambda s: jubilant.all_active(s, 'prometheus-k8s'),
+        error=jubilant.any_error,
+    )
 
-        # ---- Remove prometheus-k8s with destroy-storage, no-wait, force.
-        # Equivalent to:
-        #     juju remove-application prometheus-k8s --destroy-storage \
-        #         --no-prompt --force --no-wait
-        # Juju.remove_application covers --destroy-storage/--no-prompt/--force
-        # but not --no-wait, so we drop into Juju.cli for full parity with
-        # the bash flags.
-        juju.cli(
-            'remove-application',
-            'prometheus-k8s',
-            '--destroy-storage',
-            '--no-prompt',
-            '--force',
-            '--no-wait',
-        )
-    finally:
-        # Best-effort cleanup of the cross-controller offer/consume/alias.
-        _helpers.cross_model_teardown(
-            offerer=controller,
-            offer_name=OFFER_NAME,
-            consumer=juju,
-            consumer_app='prometheus-k8s',
-            alias=CONSUMER_ALIAS,
-        )
+    # ---- Remove prometheus-k8s with destroy-storage, no-wait, force.
+    # Equivalent to:
+    #     juju remove-application prometheus-k8s --destroy-storage \
+    #         --no-prompt --force --no-wait
+    # Juju.remove_application covers --destroy-storage/--no-prompt/--force
+    # but not --no-wait, so we drop into Juju.cli for full parity with
+    # the bash flags.
+    juju.cli(
+        'remove-application',
+        'prometheus-k8s',
+        '--destroy-storage',
+        '--no-prompt',
+        '--force',
+        '--no-wait',
+    )
+
+    # The cross-controller offer/consume/alias and the remaining SAAS
+    # relation are cleaned up by pytest-jubilant's teardown, same as the
+    # temp models in test_prometheus.py / test_prometheus_multi.py.

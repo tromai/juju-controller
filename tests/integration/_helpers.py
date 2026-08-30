@@ -166,37 +166,3 @@ def cross_model_integrate(
     )
     cross_model_consume(offerer=offerer, offer_name=offer_name, consumer=consumer, alias=alias)
     consumer.integrate(consumer_app, alias)
-
-
-def remove_cross_model_offer(*, offerer: jubilant.Juju, offer_name: str) -> None:
-    """Best-effort removal of a cross-model offer."""
-    try:
-        model_info = offerer.show_model()
-        offerer.cli(
-            "remove-offer",
-            f"admin/{model_info.short_name}.{offer_name}",
-            "-y",
-            include_model=False,
-        )
-    except jubilant.CLIError:
-        pass
-
-
-def cross_model_teardown(
-    *,
-    offerer: jubilant.Juju,
-    offer_name: str,
-    consumer: jubilant.Juju,
-    consumer_app: str,
-    alias: str,
-) -> None:
-    """Best-effort cleanup counterpart to `cross_model_integrate`."""
-    try:
-        consumer.remove_relation(consumer_app, alias)
-    except jubilant.CLIError:
-        pass
-    try:
-        consumer.remove_application(alias)
-    except jubilant.CLIError:
-        pass
-    remove_cross_model_offer(offerer=offerer, offer_name=offer_name)
