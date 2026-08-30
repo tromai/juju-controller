@@ -103,21 +103,21 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # - test_name: lxd-22.04
-          #   cloud: lxd
-          #   bootstrap_base: ubuntu@22.04
-          # - test_name: lxd-24.04
-          #   cloud: lxd
-          #   bootstrap_base: ubuntu@24.04
-          # - test_name: lxd-26.04
-          #   cloud: lxd
-          #   bootstrap_base: ubuntu@26.04
-          # - test_name: microk8s
-          #   cloud: microk8s
-          #   # CAAS bootstrap rejects --bootstrap-base entirely (it's an
-          #   # IAAS-only flag), so this is only used below to pick which
-          #   # packed charm artifact to upload, not passed to `juju bootstrap`.
-          #   bootstrap_base: ubuntu@24.04
+          - test_name: lxd-22.04
+            cloud: lxd
+            bootstrap_base: ubuntu@22.04
+          - test_name: lxd-24.04
+            cloud: lxd
+            bootstrap_base: ubuntu@24.04
+          - test_name: lxd-26.04
+            cloud: lxd
+            bootstrap_base: ubuntu@26.04
+          - test_name: microk8s
+            cloud: microk8s
+            # CAAS bootstrap rejects --bootstrap-base entirely (it's an
+            # IAAS-only flag), so this is only used below to pick which
+            # packed charm artifact to upload, not passed to `juju bootstrap`.
+            bootstrap_base: ubuntu@24.04
           - test_name: k8s
             cloud: k8s
             bootstrap_base: ubuntu@24.04
