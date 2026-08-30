@@ -2,8 +2,18 @@ name: "CI"
 on:
   push:
   workflow_dispatch:
+    inputs:
+      ref:
+        description: >-
+          Branch, tag, or SHA to build and test. Leave empty to test the ref
+          this workflow is running from. Use this to test a branch that
+          doesn't have this CI workflow itself (dispatch from a branch that
+          does, e.g. main, and point `ref` at the other branch).
+        required: false
+        type: string
 env:
   CHARM_NAME: ${{ vars.CHARM_NAME }}
+  TEST_REF: ${{ inputs.ref || github.ref }}
 
 jobs:
 
@@ -14,6 +24,8 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        ref: ${{ env.TEST_REF }}
 
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -43,6 +55,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TEST_REF }}
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -106,6 +120,8 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        ref: ${{ env.TEST_REF }}
 
     - name: Download packed charm
       id: download
