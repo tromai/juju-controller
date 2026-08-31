@@ -1,0 +1,31 @@
+# Concierge config for the MicroK8s (CAAS) integration test job.
+#
+# The CI workflow appends an `extra-bootstrap-args` line to a copy of this
+# file at runtime (see the `Prepare with concierge` step in
+# .github/workflows/ci.yml). For MicroK8s only the controller charm path is
+# injected:
+#   --controller-charm-path=<abs path>   (the packed charm built by the build job)
+#
+# NOTE: --bootstrap-base is deliberately NOT injected for MicroK8s. It's an
+# IAAS-only flag and is rejected outright on CAAS clouds, exactly as in the
+# previous hand-rolled bootstrap:
+#   juju bootstrap microk8s c --controller-charm-path=${{ steps.charm.outputs.path }}
+providers:
+  microk8s:
+    enable: true
+    bootstrap: true
+    # Mirrors the previous balchua/microk8s-actions setup:
+    #   channel: "1.36-strict/stable"
+    #   addons: '["dns", "hostpath-storage"]'
+    channel: 1.36-strict/stable
+    addons:
+      - dns
+      - hostpath-storage
+
+# NOTE: the `juju:` block is intentionally the LAST top-level block in this
+# file. The CI workflow appends a 2-space-indented `extra-bootstrap-args:`
+# line at EOF, which must land *inside* this block, so nothing may follow it.
+juju:
+  # Matches the previous `snap install juju --channel 4.1/edge`; 4.1/edge
+  # carries juju/juju#22795 (local --controller-charm-path on CAAS).
+  channel: 4.1/edge

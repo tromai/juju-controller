@@ -1,9 +1,27 @@
+# Concierge config for the Canonical K8s (CAAS) integration test job.
+#
+# The CI workflow appends an `extra-bootstrap-args` line to a copy of this
+# file at runtime (see the `Prepare with concierge` step in
+# .github/workflows/ci.yml), carrying the per-job controller charm path:
+#   --controller-charm-path=<abs path>   (the packed charm built by the build job)
+#
+# This reproduces the previous flow, which ran `concierge prepare
+# --juju-channel=4.1/edge` and then bootstrapped k8s by hand:
+#   juju bootstrap k8s c --controller-charm-path=${{ steps.charm.outputs.path }}
+# The Juju channel now lives in this config (see the `juju:` block below)
+# instead of a CLI flag so it's consistent with the lxd/microk8s configs.
 providers:
   lxd:
     enable: true
+    # Only k8s is the controller substrate for this job; don't bootstrap a
+    # second (lxd) controller. LXD stays enabled/installed as before.
+    bootstrap: false
   k8s:
     enable: true
-    bootstrap: false
+    # Previously bootstrapped by hand after `concierge prepare`; concierge now
+    # bootstraps it directly so the controller charm path can be passed via
+    # extra-bootstrap-args.
+    bootstrap: true
     bootstrap-constraints:
       root-disk: "2G"
     features:
@@ -23,3 +41,9 @@ host:
     jq:
     yq:
     rockcraft:
+
+# NOTE: the `juju:` block is intentionally the LAST top-level block in this
+# file. The CI workflow appends a 2-space-indented `extra-bootstrap-args:`
+# line at EOF, which must land *inside* this block, so nothing may follow it.
+juju:
+  channel: 4.1/edge

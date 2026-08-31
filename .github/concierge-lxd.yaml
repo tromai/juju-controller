@@ -1,0 +1,27 @@
+# Concierge config for the LXD (machine) integration test matrix jobs.
+#
+# The CI workflow appends an `extra-bootstrap-args` line to a copy of this
+# file at runtime (see the `Prepare with concierge` step in
+# .github/workflows/ci.yml). Those args carry the per-matrix-job values that
+# can't live statically here:
+#   --bootstrap-base=<ubuntu@XX.YY>      (IAAS-only; picks the controller base)
+#   --controller-charm-path=<abs path>   (the packed charm built by the build job)
+#
+# This reproduces the previous hand-rolled bootstrap:
+#   juju bootstrap lxd c \
+#     --bootstrap-base=${{ matrix.bootstrap_base }} \
+#     --controller-charm-path=${{ steps.charm.outputs.path }}
+providers:
+  lxd:
+    enable: true
+    bootstrap: true
+
+# NOTE: the `juju:` block is intentionally the LAST top-level block in this
+# file. The CI workflow appends a 2-space-indented `extra-bootstrap-args:`
+# line at EOF, which must land *inside* this block, so nothing may follow it.
+juju:
+  # Matches the previous `snap install juju --channel 4.1/edge`. 4.1/edge is
+  # needed for juju/juju#22795 (local --controller-charm-path on CAAS); we
+  # keep the same channel on every cloud so the Juju version is consistent
+  # across the matrix.
+  channel: 4.1/edge
