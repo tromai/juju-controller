@@ -74,19 +74,20 @@ jobs:
       - name: Install uv
         run: pip install uv
 
-      - name: Set up LXD
-        uses: canonical/setup-lxd@8c6a87bfb56aa48f3fb9b830baa18562d8bfd4ee # v1
+      - name: Install concierge
+        run: sudo snap install --classic concierge
 
-      - name: Add runner to lxd group
-        run: |
-          sudo usermod -a -G lxd $USER
-          newgrp lxd
-
-      - name: Install charmcraft
-        # We use latest because there's no 4.x track yet.
-        run: sudo snap install charmcraft --classic --channel=latest/stable
+      - name: Prepare with concierge
+        # Installs LXD (charmcraft's build backend) and charmcraft, replacing
+        # the old canonical/setup-lxd + `usermod -a -G lxd` + `snap install
+        # charmcraft` steps. Juju is disabled in the config since packing
+        # doesn't need a controller. See .github/concierge-build.yaml.
+        run: sudo concierge prepare -v -c .github/concierge-build.yaml
 
       - name: Pack charm
+        # Still wrapped in `sg lxd` so the freshly-added lxd group membership
+        # is active in this shell (group changes don't apply to the current
+        # login session otherwise).
         run: sg lxd -c "charmcraft pack"
 
       - name: Upload charm artifact
