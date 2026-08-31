@@ -247,7 +247,7 @@ jobs:
         fi
         mkdir -p logs
         uv run --extra integration pytest tests/integration/ -vv \
-          --log-cli-level=DEBUG \
+          --log-cli-level=INFO \
           --log-file=logs/verbose.log \
           --juju-dump-logs=logs/juju-debug-log \
           ${MARKEXPR:+-m "$MARKEXPR"}
