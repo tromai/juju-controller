@@ -71,7 +71,6 @@ class JujuControllerCharm(CharmBase):
             tracing_status_error=None,
             workload_tracing_status_error=None,
             s3_status_error=None,
-            s3_status_pending=False,
             loki_status_error=None,
             loki_endpoint_seen=False,
         )
@@ -220,7 +219,6 @@ class JujuControllerCharm(CharmBase):
             "secret_key": secret_key,
             "endpoint": s3_connection_info.get("endpoint"),
         }
-        self._stored.s3_status_pending = True
 
         try:
             logger.info("reapplying S3 credentials after leadership change")
@@ -228,18 +226,20 @@ class JujuControllerCharm(CharmBase):
             self._stored.s3_status_error = None
         except Exception as exc:  # pragma: no cover - defensive
             logger.error("failed to reapply S3 credentials after leadership change: %s", exc)
-            self._stored.s3_status_pending = False
             self._stored.s3_status_error = "failed to reapply s3 credentials"
 
     def _on_collect_status(self, event: CollectStatusEvent):
-        has_blocking_status = False
+        # Add every applicable status unconditionally. Ops picks the
+        # highest-priority status to display (blocked > maintenance > active),
+        # so we don't need to track whether a blocking status was added.
+        # This handler must not have side effects: it can run multiple times
+        # per hook, and mutating stored state here leads to surprising results.
         if len(self._stored.last_bind_addresses) > 1:
             event.add_status(
                 BlockedStatus(
                     "multiple possible DB bind addresses; set a suitable dbcluster network binding"
                 )
             )
-            has_blocking_status = True
 
         try:
             self.api_port()
@@ -247,32 +247,20 @@ class JujuControllerCharm(CharmBase):
             event.add_status(
                 BlockedStatus(f"cannot read controller API port from agent configuration: {e}")
             )
-            has_blocking_status = True
 
         if self._stored.tracing_status_error:
             event.add_status(BlockedStatus(self._stored.tracing_status_error))
-            has_blocking_status = True
 
         if self._stored.workload_tracing_status_error:
             event.add_status(BlockedStatus(self._stored.workload_tracing_status_error))
-            has_blocking_status = True
 
         if self._stored.s3_status_error:
             event.add_status(BlockedStatus(self._stored.s3_status_error))
-            has_blocking_status = True
 
         if self._stored.loki_status_error:
             event.add_status(BlockedStatus(self._stored.loki_status_error))
-            has_blocking_status = True
 
-        if self._stored.s3_status_pending:
-            if not has_blocking_status:
-                event.add_status(MaintenanceStatus("applying s3 credentials"))
-            self._stored.s3_status_pending = False
-            return
-
-        if not has_blocking_status:
-            event.add_status(ActiveStatus())
+        event.add_status(ActiveStatus())
 
     def _on_config_changed(self, _):
         controller_url = self.config["controller-url"]
@@ -803,14 +791,12 @@ class JujuControllerCharm(CharmBase):
         if not self.unit.is_leader():
             return
 
-        self._stored.s3_status_pending = True
         try:
             logger.info("applying new S3 credentials")
             self._control_socket.add_s3_credentials(credentials)
             self._stored.s3_status_error = None
         except Exception as exc:  # pragma: no cover - defensive
             logger.error("failed to apply S3 credentials: %s", exc)
-            self._stored.s3_status_pending = False
             self._stored.s3_status_error = "failed to apply s3 credentials"
 
     def _on_s3_credentials_gone(self, _event):

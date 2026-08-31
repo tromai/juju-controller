@@ -183,8 +183,11 @@ jobs:
         addons: '["dns", "hostpath-storage"]'
 
     - name: Install Juju
+      # The charm requires Juju >= 4.1 (see 'assumes' in charmcraft.yaml).
+      # 4.1 is not yet on a stable channel, so we use 4.1/edge for now.
+      # TODO: switch to 4.1/stable once it is released.
       run: |
-        sudo snap install juju --channel 4.0/stable
+        sudo snap install juju --channel 4.1/edge
 
     - name: Bootstrap on LXD
       if: matrix.cloud == 'lxd'

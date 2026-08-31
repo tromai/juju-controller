@@ -1762,35 +1762,8 @@ class TestCharm(unittest.TestCase):
             "endpoint": "https://s3.example",
         }
         mock_add_s3_credentials.assert_called_once_with(expected_credentials)
-        with patch.object(harness.charm, "api_port", return_value=17070):
-            harness.evaluate_status()
-        self.assertIsInstance(harness.charm.unit.status, MaintenanceStatus)
-
-    @patch("controlsocket.ControlSocketClient.add_s3_credentials")
-    def test_s3_status_pending_clears_after_collect(self, mock_add_s3_credentials):
-        harness = self.harness
-        harness.set_leader(True)
-        harness.charm._stored.tracing_status_error = None
-        harness.charm._stored.workload_tracing_status_error = None
-
-        relation_id = harness.add_relation("s3-backend", "s3-integrator")
-        harness.add_relation_unit(relation_id, "s3-integrator/0")
-
-        harness.update_relation_data(
-            relation_id,
-            "s3-integrator",
-            {"access-key": "ak", "secret-key": "sk", "bucket": "test-bucket"},
-        )
-        mock_add_s3_credentials.assert_called_once_with({
-            "access_key": "ak",
-            "secret_key": "sk",
-            "endpoint": None,
-        })
-
-        with patch.object(harness.charm, "api_port", return_value=17070):
-            harness.evaluate_status()
-        self.assertIsInstance(harness.charm.unit.status, MaintenanceStatus)
-
+        # add_s3_credentials is synchronous: once the handler returns, the
+        # credentials are applied, so the unit settles directly on active.
         with patch.object(harness.charm, "api_port", return_value=17070):
             harness.evaluate_status()
         self.assertIsInstance(harness.charm.unit.status, ActiveStatus)
@@ -1917,7 +1890,7 @@ class TestCharm(unittest.TestCase):
         })
         with patch.object(harness.charm, "api_port", return_value=17070):
             harness.evaluate_status()
-        self.assertIsInstance(harness.charm.unit.status, MaintenanceStatus)
+        self.assertIsInstance(harness.charm.unit.status, ActiveStatus)
 
     def test_s3_relation_sets_bucket_on_join(self):
         harness = self.harness
