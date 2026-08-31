@@ -74,15 +74,21 @@ jobs:
       - name: Install uv
         run: pip install uv
 
+      # NOTE: the build job checks out TEST_REF -- an arbitrary branch (or even
+      # a fork) selected via the workflow_dispatch `ref` input, which may not
+      # contain this repo's .github/concierge-*.yaml files. So provisioning
+      # here must NOT depend on any repo file. We deliberately use concierge's
+      # built-in `crafts` preset (shipped inside the concierge snap) rather
+      # than a `-c <config>` file for that reason. The `crafts` preset installs
+      # LXD (charmcraft's build backend), charmcraft, snapcraft and rockcraft,
+      # and disables Juju -- exactly what `charmcraft pack` needs.
       - name: Install concierge
         run: sudo snap install --classic concierge
 
       - name: Prepare with concierge
-        # Installs LXD (charmcraft's build backend) and charmcraft, replacing
-        # the old canonical/setup-lxd + `usermod -a -G lxd` + `snap install
-        # charmcraft` steps. Juju is disabled in the config since packing
-        # doesn't need a controller. See .github/concierge-build.yaml.
-        run: sudo concierge prepare -v -c .github/concierge-build.yaml
+        # --charmcraft-channel preserves the previous pin (`snap install
+        # charmcraft --channel=latest/stable`; "no 4.x track yet").
+        run: sudo concierge prepare -v -p crafts --charmcraft-channel latest/stable
 
       - name: Pack charm
         # Still wrapped in `sg lxd` so the freshly-added lxd group membership
