@@ -16,3 +16,4 @@ coverage report -m
 ruff check --preview src/ tests/
 ruff format --preview --check src/ tests/
 pyright
+codespell

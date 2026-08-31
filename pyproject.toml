@@ -10,6 +10,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    "codespell>=2.4",
     "coverage",
     "pyright",
     "ruff",
@@ -47,3 +48,7 @@ ignore = [
 pythonVersion = "3.10"
 reportUnnecessaryTypeIgnoreComment = "error"
 include = ["src", "tests"]
+
+[tool.codespell]
+skip = "build,lib,venv,icon.svg,.tox,.git,.mypy_cache,.ruff_cache,.coverage"
+
