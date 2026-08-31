@@ -5,6 +5,7 @@
 import io
 import unittest
 import urllib.error
+from http.client import HTTPMessage
 
 from configchangesocket import ConfigChangeSocketClient
 from controlsocket import ControlSocketClient
@@ -21,7 +22,10 @@ class TestAPIErrorReexport(unittest.TestCase):
 class TestClass(unittest.TestCase):
     def test_add_metrics_user_success(self):
         mock_opener = MockOpener(self)
-        control_socket = ControlSocketClient("fake_socket_path", opener=mock_opener)
+        control_socket = ControlSocketClient(
+            "fake_socket_path",
+            opener=mock_opener,  # type: ignore
+        )
 
         mock_opener.expect(
             url="http://localhost/metrics-users",
@@ -36,7 +40,10 @@ class TestClass(unittest.TestCase):
 
     def test_add_metrics_user_fail(self):
         mock_opener = MockOpener(self)
-        control_socket = ControlSocketClient("fake_socket_path", opener=mock_opener)
+        control_socket = ControlSocketClient(
+            "fake_socket_path",
+            opener=mock_opener,  # type: ignore
+        )
 
         mock_opener.expect(
             url="http://localhost/metrics-users",
@@ -46,7 +53,7 @@ class TestClass(unittest.TestCase):
                 url="http://localhost/metrics-users",
                 code=409,
                 msg="",
-                hdrs=None,
+                hdrs=HTTPMessage(),
                 fp=io.BytesIO(rb'{"error":"user \"juju-metrics-r0\" already exists"}'),
             ),
         )
@@ -60,7 +67,10 @@ class TestClass(unittest.TestCase):
 
     def test_remove_metrics_user_success(self):
         mock_opener = MockOpener(self)
-        control_socket = ControlSocketClient("fake_socket_path", opener=mock_opener)
+        control_socket = ControlSocketClient(
+            "fake_socket_path",
+            opener=mock_opener,  # type: ignore
+        )
 
         mock_opener.expect(
             url="http://localhost/metrics-users/juju-metrics-r0",
@@ -75,7 +85,10 @@ class TestClass(unittest.TestCase):
 
     def test_remove_metrics_user_fail(self):
         mock_opener = MockOpener(self)
-        control_socket = ControlSocketClient("fake_socket_path", opener=mock_opener)
+        control_socket = ControlSocketClient(
+            "fake_socket_path",
+            opener=mock_opener,  # type: ignore
+        )
 
         mock_opener.expect(
             url="http://localhost/metrics-users/juju-metrics-r0",
@@ -85,7 +98,7 @@ class TestClass(unittest.TestCase):
                 url="http://localhost/metrics-users/juju-metrics-r0",
                 code=404,
                 msg="",
-                hdrs=None,
+                hdrs=HTTPMessage(),
                 fp=io.BytesIO(rb'{"error":"user \"juju-metrics-r0\" not found"}'),
             ),
         )
@@ -99,7 +112,10 @@ class TestClass(unittest.TestCase):
 
     def test_set_charm_tracing_config_success(self):
         mock_opener = MockOpener(self)
-        control_socket = ControlSocketClient("fake_socket_path", opener=mock_opener)
+        control_socket = ControlSocketClient(
+            "fake_socket_path",
+            opener=mock_opener,  # type: ignore
+        )
 
         mock_opener.expect(
             url="http://localhost/charm-tracing-config",
@@ -123,7 +139,10 @@ class TestClass(unittest.TestCase):
 
     def test_set_workload_tracing_config_success(self):
         mock_opener = MockOpener(self)
-        control_socket = ControlSocketClient("fake_socket_path", opener=mock_opener)
+        control_socket = ControlSocketClient(
+            "fake_socket_path",
+            opener=mock_opener,  # type: ignore
+        )
 
         mock_opener.expect(
             url="http://localhost/workload-tracing-config",
@@ -155,7 +174,10 @@ class TestClass(unittest.TestCase):
 
     def test_set_loki_endpoint_success(self):
         mock_opener = MockOpener(self)
-        control_socket = ControlSocketClient("fake_socket_path", opener=mock_opener)
+        control_socket = ControlSocketClient(
+            "fake_socket_path",
+            opener=mock_opener,  # type: ignore
+        )
 
         mock_opener.expect(
             url="http://localhost/loki-endpoint",
@@ -178,7 +200,10 @@ class TestClass(unittest.TestCase):
 
     def test_set_loki_endpoint_fail(self):
         mock_opener = MockOpener(self)
-        control_socket = ControlSocketClient("fake_socket_path", opener=mock_opener)
+        control_socket = ControlSocketClient(
+            "fake_socket_path",
+            opener=mock_opener,  # type: ignore
+        )
 
         mock_opener.expect(
             url="http://localhost/loki-endpoint",
@@ -192,7 +217,7 @@ class TestClass(unittest.TestCase):
                 url="http://localhost/loki-endpoint",
                 code=500,
                 msg="",
-                hdrs=None,
+                hdrs=HTTPMessage(),
                 fp=io.BytesIO(rb'{"error":"internal error"}'),
             ),
         )
@@ -209,7 +234,10 @@ class TestClass(unittest.TestCase):
 
     def test_remove_loki_endpoint_success(self):
         mock_opener = MockOpener(self)
-        control_socket = ControlSocketClient("fake_socket_path", opener=mock_opener)
+        control_socket = ControlSocketClient(
+            "fake_socket_path",
+            opener=mock_opener,  # type: ignore
+        )
 
         mock_opener.expect(
             url="http://localhost/loki-endpoint",
@@ -224,7 +252,10 @@ class TestClass(unittest.TestCase):
 
     def test_remove_loki_endpoint_fail(self):
         mock_opener = MockOpener(self)
-        control_socket = ControlSocketClient("fake_socket_path", opener=mock_opener)
+        control_socket = ControlSocketClient(
+            "fake_socket_path",
+            opener=mock_opener,  # type: ignore
+        )
 
         mock_opener.expect(
             url="http://localhost/loki-endpoint",
@@ -234,7 +265,7 @@ class TestClass(unittest.TestCase):
                 url="http://localhost/loki-endpoint",
                 code=404,
                 msg="",
-                hdrs=None,
+                hdrs=HTTPMessage(),
                 fp=io.BytesIO(rb'{"error":"loki endpoint not found"}'),
             ),
         )
@@ -247,7 +278,10 @@ class TestClass(unittest.TestCase):
 
     def test_connection_error(self):
         mock_opener = MockOpener(self)
-        control_socket = ControlSocketClient("fake_socket_path", opener=mock_opener)
+        control_socket = ControlSocketClient(
+            "fake_socket_path",
+            opener=mock_opener,  # type: ignore
+        )
 
         mock_opener.expect(
             url="http://localhost/metrics-users",
@@ -261,7 +295,10 @@ class TestClass(unittest.TestCase):
 
     def test_get_controller_agent_id(self):
         mock_opener = MockOpener(self)
-        config_reload_socket = ConfigChangeSocketClient("fake_socket_path", opener=mock_opener)
+        config_reload_socket = ConfigChangeSocketClient(
+            "fake_socket_path",
+            opener=mock_opener,  # type: ignore
+        )
 
         mock_opener.expect(
             url="http://localhost/agent-id",
@@ -277,7 +314,10 @@ class TestClass(unittest.TestCase):
 
     def test_reload_config(self):
         mock_opener = MockOpener(self)
-        config_reload_socket = ConfigChangeSocketClient("fake_socket_path", opener=mock_opener)
+        config_reload_socket = ConfigChangeSocketClient(
+            "fake_socket_path",
+            opener=mock_opener,  # type: ignore
+        )
 
         mock_opener.expect(
             url="http://localhost/reload",

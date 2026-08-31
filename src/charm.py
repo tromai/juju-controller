@@ -7,6 +7,7 @@ import logging
 import secrets
 import urllib.parse
 from pathlib import Path
+from typing import cast
 
 import yaml
 from charms.certificate_transfer_interface.v1.certificate_transfer import (
@@ -695,10 +696,10 @@ class JujuControllerCharm(CharmBase):
         sample_ratio = float(self.config["workload-tracing-sample-ratio"])
         self._validate_open_telemetry_sample_ratio(sample_ratio)
         return (
-            self.config["workload-tracing-stack-traces"],
+            cast(bool, self.config["workload-tracing-stack-traces"]),
             sample_ratio,
-            self.config["workload-tracing-tail-sampling-threshold"],
-            self.config["workload-tracing-insecure-skip-verify"],
+            cast(str, self.config["workload-tracing-tail-sampling-threshold"]),
+            cast(bool, self.config["workload-tracing-insecure-skip-verify"]),
         )
 
     def _update_charm_tracing_config(self):

@@ -11,6 +11,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "coverage",
+    "pyright",
     "ruff",
 ]
 
@@ -41,3 +42,8 @@ ignore = [
     # We ignore it rather than renaming all of them.
     "N818",  # error-suffix-on-exception-name
 ]
+
+[tool.pyright]
+pythonVersion = "3.10"
+reportUnnecessaryTypeIgnoreComment = "error"
+include = ["src", "tests"]
