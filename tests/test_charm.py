@@ -1735,8 +1735,8 @@ class TestCharm(unittest.TestCase):
         harness.evaluate_status()
         self.assertIsInstance(harness.charm.unit.status, ops.ActiveStatus)
 
-    @patch("controlsocket.ControlSocketClient.add_s3_credentials")
-    def test_s3_relation_credentials_changed(self, mock_add_s3_credentials):
+    @patch("controlsocket.ControlSocketClient.add_s3_config")
+    def test_s3_relation_credentials_changed(self, mock_add_s3_config):
         harness = self.harness
         harness.set_leader(True)
         harness.charm._stored.tracing_status_error = None
@@ -1752,6 +1752,7 @@ class TestCharm(unittest.TestCase):
                 "access-key": "ak",
                 "secret-key": "sk",
                 "bucket": "test-bucket",
+                "region": "us-east-1",
                 "endpoint": "https://s3.example",
             },
         )
@@ -1759,15 +1760,17 @@ class TestCharm(unittest.TestCase):
         expected_credentials = {
             "access_key": "ak",
             "secret_key": "sk",
+            "bucket": "test-bucket",
+            "region": "us-east-1",
             "endpoint": "https://s3.example",
         }
-        mock_add_s3_credentials.assert_called_once_with(expected_credentials)
+        mock_add_s3_config.assert_called_once_with(expected_credentials)
         with patch.object(harness.charm, "api_port", return_value=17070):
             harness.evaluate_status()
         self.assertIsInstance(harness.charm.unit.status, ops.MaintenanceStatus)
 
-    @patch("controlsocket.ControlSocketClient.add_s3_credentials")
-    def test_s3_status_pending_clears_after_collect(self, mock_add_s3_credentials):
+    @patch("controlsocket.ControlSocketClient.add_s3_config")
+    def test_s3_status_pending_clears_after_collect(self, mock_add_s3_config):
         harness = self.harness
         harness.set_leader(True)
         harness.charm._stored.tracing_status_error = None
@@ -1779,11 +1782,18 @@ class TestCharm(unittest.TestCase):
         harness.update_relation_data(
             relation_id,
             "s3-integrator",
-            {"access-key": "ak", "secret-key": "sk", "bucket": "test-bucket"},
+            {
+                "access-key": "ak",
+                "secret-key": "sk",
+                "bucket": "test-bucket",
+                "region": "us-east-1",
+            },
         )
-        mock_add_s3_credentials.assert_called_once_with({
+        mock_add_s3_config.assert_called_once_with({
             "access_key": "ak",
             "secret_key": "sk",
+            "bucket": "test-bucket",
+            "region": "us-east-1",
             "endpoint": None,
         })
 
@@ -1796,7 +1806,7 @@ class TestCharm(unittest.TestCase):
         self.assertIsInstance(harness.charm.unit.status, ops.ActiveStatus)
 
     @patch(
-        "controlsocket.ControlSocketClient.add_s3_credentials",
+        "controlsocket.ControlSocketClient.add_s3_config",
         side_effect=RuntimeError("boom"),
     )
     def test_s3_relation_credentials_changed_failure_sets_blocked(self, _mock_add):
@@ -1818,12 +1828,38 @@ class TestCharm(unittest.TestCase):
             harness.evaluate_status()
         self.assertIsInstance(harness.charm.unit.status, ops.BlockedStatus)
         self.assertIn(
-            "failed to apply s3 credentials",
+            "failed to apply s3 config",
             harness.charm.unit.status.message,
         )
 
-    @patch("controlsocket.ControlSocketClient.add_s3_credentials")
-    def test_s3_relation_credentials_changed_non_leader_no_set(self, mock_add_s3_credentials):
+    @patch("controlsocket.ControlSocketClient.add_s3_config")
+    def test_s3_relation_credentials_changed_without_region(self, mock_add_s3_config):
+        harness = self.harness
+        harness.set_leader(True)
+
+        relation_id = harness.add_relation("s3-backend", "s3-integrator")
+        harness.add_relation_unit(relation_id, "s3-integrator/0")
+
+        harness.update_relation_data(
+            relation_id,
+            "s3-integrator",
+            {
+                "access-key": "ak",
+                "secret-key": "sk",
+                "bucket": "test-bucket",
+            },
+        )
+
+        mock_add_s3_config.assert_called_once_with({
+            "access_key": "ak",
+            "secret_key": "sk",
+            "bucket": "test-bucket",
+            "region": None,
+            "endpoint": None,
+        })
+
+    @patch("controlsocket.ControlSocketClient.add_s3_config")
+    def test_s3_relation_credentials_changed_non_leader_no_set(self, mock_add_s3_config):
         harness = self.harness
         harness.set_leader(False)
 
@@ -1836,10 +1872,10 @@ class TestCharm(unittest.TestCase):
             {"access-key": "ak", "secret-key": "sk", "bucket": "test-bucket"},
         )
 
-        mock_add_s3_credentials.assert_not_called()
+        mock_add_s3_config.assert_not_called()
 
-    @patch("controlsocket.ControlSocketClient.add_s3_credentials")
-    def test_s3_relation_credentials_replayed_on_leader_elected(self, mock_add_s3_credentials):
+    @patch("controlsocket.ControlSocketClient.add_s3_config")
+    def test_s3_relation_credentials_replayed_on_leader_elected(self, mock_add_s3_config):
         harness = self.harness
 
         relation_id = harness.add_relation("s3-backend", "s3-integrator")
@@ -1852,22 +1888,51 @@ class TestCharm(unittest.TestCase):
                 "access-key": "ak",
                 "secret-key": "sk",
                 "bucket": "test-bucket",
+                "region": "us-east-1",
                 "endpoint": "https://s3.example",
             },
         )
         expected_credentials = {
             "access_key": "ak",
             "secret_key": "sk",
+            "bucket": "test-bucket",
+            "region": "us-east-1",
             "endpoint": "https://s3.example",
         }
-        mock_add_s3_credentials.assert_not_called()
+        mock_add_s3_config.assert_not_called()
 
         harness.set_leader(True)
 
-        mock_add_s3_credentials.assert_called_once_with(expected_credentials)
+        mock_add_s3_config.assert_called_once_with(expected_credentials)
+
+    @patch("controlsocket.ControlSocketClient.add_s3_config")
+    def test_s3_relation_credentials_replayed_without_optional_config(self, mock_add_s3_config):
+        harness = self.harness
+
+        relation_id = harness.add_relation("s3-backend", "s3-integrator")
+        harness.add_relation_unit(relation_id, "s3-integrator/0")
+
+        harness.update_relation_data(
+            relation_id,
+            "s3-integrator",
+            {
+                "access-key": "ak",
+                "secret-key": "sk",
+            },
+        )
+
+        harness.set_leader(True)
+
+        mock_add_s3_config.assert_called_once_with({
+            "access_key": "ak",
+            "secret_key": "sk",
+            "bucket": None,
+            "region": None,
+            "endpoint": None,
+        })
 
     @patch(
-        "controlsocket.ControlSocketClient.add_s3_credentials",
+        "controlsocket.ControlSocketClient.add_s3_config",
         side_effect=RuntimeError("boom"),
     )
     def test_s3_relation_replay_failure_sets_blocked_status(self, _mock_add):
@@ -1887,10 +1952,10 @@ class TestCharm(unittest.TestCase):
         with patch.object(harness.charm, "api_port", return_value=17070):
             harness.evaluate_status()
         self.assertIsInstance(harness.charm.unit.status, ops.BlockedStatus)
-        self.assertIn("failed to reapply s3 credentials", harness.charm.unit.status.message)
+        self.assertIn("failed to reapply s3 config", harness.charm.unit.status.message)
 
-    @patch("controlsocket.ControlSocketClient.add_s3_credentials")
-    def test_s3_relation_credentials_updated(self, mock_add_s3_credentials):
+    @patch("controlsocket.ControlSocketClient.add_s3_config")
+    def test_s3_relation_credentials_updated(self, mock_add_s3_config):
         harness = self.harness
         harness.set_leader(True)
         harness.charm._stored.tracing_status_error = None
@@ -1902,17 +1967,29 @@ class TestCharm(unittest.TestCase):
         harness.update_relation_data(
             relation_id,
             "s3-integrator",
-            {"access-key": "ak", "secret-key": "sk", "bucket": "test-bucket"},
+            {
+                "access-key": "ak",
+                "secret-key": "sk",
+                "bucket": "test-bucket",
+                "region": "us-east-1",
+            },
         )
 
         harness.update_relation_data(
             relation_id,
             "s3-integrator",
-            {"access-key": "ak2", "secret-key": "sk2", "bucket": "test-bucket"},
+            {
+                "access-key": "ak2",
+                "secret-key": "sk2",
+                "bucket": "test-bucket",
+                "region": "us-west-2",
+            },
         )
-        mock_add_s3_credentials.assert_called_with({
+        mock_add_s3_config.assert_called_with({
             "access_key": "ak2",
             "secret_key": "sk2",
+            "bucket": "test-bucket",
+            "region": "us-west-2",
             "endpoint": None,
         })
         with patch.object(harness.charm, "api_port", return_value=17070):
@@ -1930,11 +2007,9 @@ class TestCharm(unittest.TestCase):
         data = harness.get_relation_data(relation_id, harness.charm.app.name)
         self.assertEqual(data["bucket"], f"relation-{relation_id}")
 
-    @patch("controlsocket.ControlSocketClient.remove_s3_credentials")
-    @patch("controlsocket.ControlSocketClient.add_s3_credentials")
-    def test_s3_relation_credentials_gone(
-        self, mock_add_s3_credentials, mock_remove_s3_credentials
-    ):
+    @patch("controlsocket.ControlSocketClient.remove_s3_config")
+    @patch("controlsocket.ControlSocketClient.add_s3_config")
+    def test_s3_relation_credentials_gone(self, mock_add_s3_config, mock_remove_s3_config):
         harness = self.harness
         harness.set_leader(True)
 
@@ -1948,15 +2023,17 @@ class TestCharm(unittest.TestCase):
         )
 
         harness.remove_relation(relation_id)
-        mock_add_s3_credentials.assert_called_once_with({
+        mock_add_s3_config.assert_called_once_with({
             "access_key": "ak",
             "secret_key": "sk",
+            "bucket": None,
+            "region": None,
             "endpoint": None,
         })
-        mock_remove_s3_credentials.assert_called_once_with()
+        mock_remove_s3_config.assert_called_once_with()
 
-    @patch("controlsocket.ControlSocketClient.remove_s3_credentials")
-    def test_s3_relation_credentials_gone_non_leader(self, mock_remove_s3_credentials):
+    @patch("controlsocket.ControlSocketClient.remove_s3_config")
+    def test_s3_relation_credentials_gone_non_leader(self, mock_remove_s3_config):
         harness = self.harness
         harness.set_leader(False)
 
@@ -1970,10 +2047,10 @@ class TestCharm(unittest.TestCase):
         )
         harness.remove_relation(relation_id)
 
-        mock_remove_s3_credentials.assert_not_called()
+        mock_remove_s3_config.assert_not_called()
 
     @patch(
-        "controlsocket.ControlSocketClient.remove_s3_credentials",
+        "controlsocket.ControlSocketClient.remove_s3_config",
         side_effect=RuntimeError("boom"),
     )
     def test_s3_relation_credentials_gone_failure_sets_blocked(self, _mock_remove):
@@ -1996,7 +2073,7 @@ class TestCharm(unittest.TestCase):
         with patch.object(harness.charm, "api_port", return_value=17070):
             harness.evaluate_status()
         self.assertIsInstance(harness.charm.unit.status, ops.BlockedStatus)
-        self.assertIn("failed to remove s3 credentials", harness.charm.unit.status.message)
+        self.assertIn("failed to remove s3 config", harness.charm.unit.status.message)
 
     @patch("controlsocket.ControlSocketClient.set_loki_endpoint")
     def test_loki_push_api_endpoint_joined(self, mock_set_loki_endpoint):
