@@ -33,7 +33,7 @@ jobs:
     - name: Install dependencies for testing
       run: |
         source .venv/bin/activate
-        uv pip install ".[dev]"
+        uv sync --frozen --extra dev
 
     - name: Run tests
       run: |
