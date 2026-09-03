@@ -9,7 +9,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "codespell>=2.4",
+    "codespell",
     "coverage",
     "pyright",
     "ruff",

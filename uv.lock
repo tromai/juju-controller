@@ -166,7 +166,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "codespell", marker = "extra == 'dev'", specifier = ">=2.4" },
+    { name = "codespell", marker = "extra == 'dev'" },
     { name = "cosl" },
     { name = "coverage", marker = "extra == 'dev'" },
     { name = "ops" },
