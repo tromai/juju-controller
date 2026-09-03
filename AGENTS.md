@@ -9,18 +9,18 @@ If guidance conflicts, Juju Hook Lifecycle rules take precedence.
 
 ## Setup
 
-Create and activate a virtualenv, and install the development requirements:
-   
-```
-virtualenv -p python3 venv
-source venv/bin/activate
-uv pip install ".[dev]"
-```
-
 Install `astral-uv` using snaps:
 
 ```
 sudo snap install astral-uv --classic
+```
+
+Create and activate a virtualenv, and install the development requirements:
+   
+```
+uv venv
+source .venv/bin/activate
+uv sync --frozen --extra dev
 ```
 
 ## Build
