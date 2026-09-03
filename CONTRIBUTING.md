@@ -13,7 +13,7 @@ Create and activate a virtualenv with the development requirements:
 ```
 uv venv
 source .venv/bin/activate
-uv pip install ".[dev]"
+uv sync --frozen --extra dev
 ```
 
 ## Testing
