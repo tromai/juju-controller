@@ -24,15 +24,15 @@ operator behaviour without full deployment. Just `run_tests`:
     ./run_tests
 
 The `run_tests` script runs `ruff` lint and format checks. They will report
-error but don't fix any file. To let `ruff` fix trivial errors automatically:
+error but don't fix any file. To let `ruff` fix trivial errors automatically, 
+activate the virtualenv and run:
 
 ```console
-// Assume the virtualenv has been activated.
-// Run format after check to make sure all fixes from ruff
-// are re-formatted correctly.
 $ ruff check --preview --fix src/ tests/
 $ ruff format --preview src/ tests/
 ```
+
+We run format after check to make sure all fixes from ruff are re-formatted correctly.
 
 ## Deploying
 
