@@ -18,21 +18,42 @@ uv sync --frozen --extra dev
 
 ## Testing
 
-The Python operator framework includes a very nice harness for testing
-operator behaviour without full deployment. Just `run_tests`:
-
-    ./run_tests
-
-The `run_tests` script runs `ruff` lint and format checks. They will report
-error but don't fix any file. To let `ruff` fix trivial errors automatically:
+This charm uses `make` to run its formatting, linting, and test commands
+(following [charm-tech's command standardisation](https://github.com/canonical/charmcraft) conventions):
 
 ```console
-// Assume the virtualenv has been activated.
-// Run format after check to make sure all fixes from ruff
-// are re-formatted correctly.
-$ ruff check --preview --fix src/ tests/
-$ ruff format --preview src/ tests/
+$ make            # Runs lint and unit (the default target)
+$ make format     # Auto-format code, and auto-fix trivial lint issues
+$ make lint       # Report lint, format, static typing, and spelling issues
+$ make unit       # Run unit tests (with coverage report)
+$ make integration  # Run integration tests against a bootstrapped Juju controller
 ```
+
+`make lint` will report errors but won't fix any file; use `make format` to
+automatically fix trivial issues:
+
+```console
+$ make format
+```
+
+### Integration tests
+
+Integration tests assume a Juju controller running this repo's
+juju-controller charm has already been bootstrapped (they don't bootstrap or
+destroy anything themselves). For local runs, bootstrap a controller with the
+charm under test, e.g.:
+
+```console
+$ charmcraft pack
+$ juju bootstrap lxd juju-controller-itest \
+    --controller-charm-path=./juju-controller_*.charm
+$ make integration
+```
+
+In CI, [concierge](https://github.com/canonical/concierge) is used to
+provision the substrate (LXD, MicroK8s, or Canonical K8s) and bootstrap the
+controller for each cloud in the integration test matrix; see
+`.github/concierge-*.yaml` and `.github/workflows/ci.yml`.
 
 ## Deploying
 

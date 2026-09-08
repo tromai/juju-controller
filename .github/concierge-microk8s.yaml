@@ -1,0 +1,12 @@
+providers:
+  microk8s:
+    enable: true
+    bootstrap: false
+    channel: 1.36-strict/stable
+    addons:
+      - dns
+      - hostpath-storage
+
+juju:
+  # TODO: revert this back to 4.1/stable
+  channel: 4.1/edge

@@ -1,0 +1,14 @@
+providers:
+  k8s:
+    enable: true
+    bootstrap: false
+    features:
+      load-balancer:
+        l2-mode: "true"
+        cidrs: "10.43.45.0/28"
+      local-storage: {}
+      network: {}
+
+juju:
+  # TODO: revert this back to 4.1/stable
+  channel: 4.1/edge

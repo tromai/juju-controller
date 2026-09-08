@@ -1,0 +1,8 @@
+providers:
+  lxd:
+    enable: true
+    bootstrap: false
+
+juju:
+  # TODO: revert this back to 4.1/stable
+  channel: 4.1/edge

@@ -45,4 +45,7 @@ charmcraft fetch-libs
 
 ## Running Tests
 
-- `./run_tests`
+- `make lint` — ruff check/format, pyright, codespell
+- `make format` — auto-fix with ruff
+- `make unit` — unit tests with coverage
+- `make integration` — integration (smoke) tests against a bootstrapped Juju controller
