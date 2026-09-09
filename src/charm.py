@@ -199,9 +199,6 @@ class JujuControllerCharm(CharmBase):
         open(file_path, "w+").close()
 
     def _on_start(self, _):
-        # TEMPORARY CI verification: the locally packed controller charm must
-        # fail during bootstrap. Remove after confirming the workflow result.
-        raise RuntimeError("intentional CI verification failure from local charm")
         self.unit.status = ActiveStatus()
 
     def _on_leader_elected(self, _event: LeaderElectedEvent):

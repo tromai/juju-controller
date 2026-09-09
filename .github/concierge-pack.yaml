@@ -9,4 +9,4 @@ providers:
 host:
   snaps:
     charmcraft:
-      channel: latest/stable
+      channel: 4.x/stable
