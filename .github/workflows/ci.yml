@@ -163,7 +163,6 @@ jobs:
     - name: Run smoke integration tests
       run: |
         juju switch "concierge-${{ matrix.cloud }}"
-        mkdir -p logs
         uv run --group integration pytest tests/integration -v \
           --log-cli-level=INFO
 
