@@ -107,8 +107,14 @@ jobs:
             bootstrap_base: ubuntu@26.04
           - test_name: microk8s
             cloud: microk8s
+            # This is only used to pick which
+            # packed charm artifact to `juju bootstrap`.
+            bootstrap_base: ubuntu@24.04
           - test_name: k8s
             cloud: k8s
+            # This is only used to pick which
+            # packed charm artifact to `juju bootstrap`.
+            bootstrap_base: ubuntu@24.04
 
     steps:
     - name: Checkout code
