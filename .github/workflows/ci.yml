@@ -59,25 +59,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
-      - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
-        with:
-          python-version: '3.10'
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
-
-      - name: Set up LXD
-        uses: canonical/setup-lxd@8c6a87bfb56aa48f3fb9b830baa18562d8bfd4ee  # 1.0.0
-
-      - name: Add runner to lxd group
-        run: |
-          sudo usermod -a -G lxd $USER
-          newgrp lxd
-
-      - name: Install charmcraft
-        # We use latest because there's no 4.x track yet.
-        run: sudo snap install charmcraft --classic --channel=latest/stable
+      - name: Prepare with concierge
+        run: sudo concierge prepare -v -c ".github/concierge-pack.yaml"
 
       - name: Pack charm
         run: sg lxd -c "charmcraft pack"
@@ -151,32 +134,28 @@ jobs:
       # controller.
       run: sudo concierge prepare -v -c ".github/concierge-${{ matrix.cloud }}.yaml"
 
-    - name: Bootstrap Juju controller
+    - name: Bootstrap Juju controller on LXD
+      if: matrix.cloud == 'lxd'
+      # Concierge's LXD provider registers Juju's "localhost" cloud.
       run: |
-        # Juju's cloud name doesn't always match concierge's provider name
-        # (e.g. concierge's "lxd" provider registers the "localhost" cloud).
-        case "${{ matrix.cloud }}" in
-          lxd) JUJU_CLOUD="localhost" ;;
-          *) JUJU_CLOUD="${{ matrix.cloud }}" ;;
-        esac
+        juju bootstrap localhost "concierge-lxd" \
+          --bootstrap-base=${{ matrix.bootstrap_base }} \
+          --controller-charm-path=${{ steps.charm.outputs.path }}
 
-        BOOTSTRAP_ARGS=(--controller-charm-path "${{ steps.charm.outputs.path }}")
-        # --bootstrap-base is IAAS-only; only pass it on LXD.
-        if [ "${{ matrix.cloud }}" = "lxd" ]; then
-          BOOTSTRAP_ARGS+=(--bootstrap-base "${{ matrix.bootstrap_base }}")
-        fi
-        # Matches the `bootstrap-constraints.root-disk` previously set in
-        # .github/concierge-k8s.yaml (only applied by concierge's own
-        # `juju bootstrap`, which we no longer use).
-        if [ "${{ matrix.cloud }}" = "k8s" ]; then
-          BOOTSTRAP_ARGS+=(--bootstrap-constraints root-disk=2G)
-        fi
+    - name: Bootstrap Juju controller on Canonical k8s
+      if: matrix.cloud == 'k8s'
+      run: |
+        juju bootstrap k8s "concierge-k8s" \
+          --controller-charm-path "${{ steps.charm.outputs.path }}"
 
-        juju bootstrap "$JUJU_CLOUD" "concierge-${{ matrix.cloud }}" \
-          --verbose "${BOOTSTRAP_ARGS[@]}"
+    - name: Bootstrap Juju controller on MicroK8s
+      if: matrix.cloud == 'microk8s'
+      run: |
+        juju bootstrap microk8s "concierge-microk8s" \
+          --controller-charm-path "${{ steps.charm.outputs.path }}"
 
     - name: Install uv
-      uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d  # v10.0.1
 
     - name: Run smoke integration tests
       run: |
