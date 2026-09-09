@@ -198,7 +198,7 @@ dependencies = [
     { name = "ops" },
 ]
 
-[package.optional-dependencies]
+[package.dev-dependencies]
 dev = [
     { name = "codespell" },
     { name = "coverage" },
@@ -212,16 +212,21 @@ integration = [
 
 [package.metadata]
 requires-dist = [
-    { name = "codespell", marker = "extra == 'dev'" },
     { name = "cosl" },
-    { name = "coverage", marker = "extra == 'dev'" },
-    { name = "jubilant", marker = "extra == 'integration'" },
     { name = "ops", specifier = "~=3.8" },
-    { name = "pyright", marker = "extra == 'dev'" },
-    { name = "pytest", marker = "extra == 'integration'" },
-    { name = "ruff", marker = "extra == 'dev'" },
 ]
-provides-extras = ["dev", "integration"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "codespell" },
+    { name = "coverage" },
+    { name = "pyright" },
+    { name = "ruff" },
+]
+integration = [
+    { name = "jubilant" },
+    { name = "pytest" },
+]
 
 [[package]]
 name = "nodeenv"

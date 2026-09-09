@@ -20,7 +20,7 @@ Create and activate a virtualenv, and install the development requirements:
 ```
 uv venv
 source .venv/bin/activate
-uv sync --frozen --extra dev
+uv sync --frozen --group dev
 ```
 
 ## Build

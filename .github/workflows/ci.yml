@@ -176,7 +176,7 @@ jobs:
       run: |
         juju switch "concierge-${{ matrix.cloud }}"
         mkdir -p logs
-        uv run --extra integration pytest tests/integration -v \
+        uv run --group integration pytest tests/integration -v \
           --log-cli-level=INFO \
           --log-file=logs/verbose.log
 
