@@ -53,7 +53,7 @@ jobs:
 
   build:
     name: Build charm
-    needs: [lint, unit-tests]
+    needs: [lint]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
