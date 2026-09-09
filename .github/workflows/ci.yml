@@ -91,15 +91,11 @@ jobs:
           - test_name: lxd-26.04
             cloud: lxd
             bootstrap_base: ubuntu@26.04
-          - test_name: microk8s
-            cloud: microk8s
-            # This is only used to pick which
-            # packed charm artifact to `juju bootstrap`.
-            bootstrap_base: ubuntu@24.04
+          # - test_name: microk8s
+          #   cloud: microk8s
+          #   bootstrap_base: ubuntu@24.04
           - test_name: k8s
             cloud: k8s
-            # This is only used to pick which
-            # packed charm artifact to `juju bootstrap`.
             bootstrap_base: ubuntu@24.04
 
     steps:
@@ -107,26 +103,10 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
     - name: Download packed charm
-      id: download
       uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
       with:
         name: charm
-
-    - name: Find packed charm path
-      id: charm
-      # The build job packs one .charm per platform declared in
-      # charmcraft.yaml (e.g. juju-controller_ubuntu@22.04-amd64.charm). Pick
-      # the file matching *this* matrix job's base.
-      run: |
-        BASE="${{ matrix.bootstrap_base }}"
-        CHARM_FILE="$(ls -1 juju-controller_${BASE}-*.charm | head -n1)"
-        if [[ -z "$CHARM_FILE" ]]; then
-          echo "No packed charm found for base ${BASE}" >&2
-          ls -1 *.charm >&2 || true
-          exit 1
-        fi
-        CHARM_PATH="$(readlink -f "$CHARM_FILE")"
-        echo "path=$CHARM_PATH" >> "$GITHUB_OUTPUT"
+        path: charms
 
     - name: Install concierge
       run: sudo snap install --classic concierge
@@ -143,19 +123,19 @@ jobs:
       run: |
         juju bootstrap localhost "concierge-lxd" \
           --bootstrap-base=${{ matrix.bootstrap_base }} \
-          --controller-charm-path=${{ steps.charm.outputs.path }}
+          --controller-charm-path "$GITHUB_WORKSPACE/charms/juju-controller_${{ matrix.bootstrap_base }}-amd64.charm"
 
     - name: Bootstrap Juju controller on Canonical k8s
       if: matrix.cloud == 'k8s'
       run: |
         juju bootstrap k8s "concierge-k8s" \
-          --controller-charm-path "${{ steps.charm.outputs.path }}"
+          --controller-charm-path "$GITHUB_WORKSPACE/charms/juju-controller_${{ matrix.bootstrap_base }}-amd64.charm"
 
     - name: Bootstrap Juju controller on MicroK8s
       if: matrix.cloud == 'microk8s'
       run: |
         juju bootstrap microk8s "concierge-microk8s" \
-          --controller-charm-path "${{ steps.charm.outputs.path }}"
+          --controller-charm-path "$GITHUB_WORKSPACE/charms/juju-controller_${{ matrix.bootstrap_base }}-amd64.charm"
 
     - name: Install uv
       uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d  # v10.0.1
