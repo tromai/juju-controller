@@ -62,6 +62,9 @@ jobs:
       - name: Install charmcraft
         run: sudo snap install charmcraft --channel latest/stable --classic
 
+      - name: Set up LXD
+        uses: canonical/setup-lxd@da2ac84e727dc534215fd14cd088b9209d65893b
+
       - name: Pack charm
         run: charmcraft pack
 
@@ -135,7 +138,9 @@ jobs:
       uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d  # v10.0.1
 
     - name: Run integration tests
+      # Make sure we switch to the bootstrapped controller.
       run: |
+        juju switch "concierge-${{ matrix.cloud }}:"
         make integration
 
     - name: Get some info for debugging
