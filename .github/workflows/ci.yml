@@ -136,9 +136,7 @@ jobs:
 
     - name: Run integration tests
       run: |
-        juju switch "concierge-${{ matrix.cloud }}"
-        uv run --group integration pytest tests/integration -v \
-          --log-cli-level=INFO
+        make integration
 
     - name: Get some info for debugging
       if: failure()
