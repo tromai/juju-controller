@@ -59,11 +59,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
-      - name: Install concierge
-        run: sudo snap install --classic concierge
-
-      - name: Prepare with concierge
-        run: sudo concierge prepare -v -c ".github/concierge-pack.yaml"
+      - name: Install charmcraft
+        run: sudo snap install charmcraft --channel latest/stable --classic
 
       - name: Pack charm
         run: charmcraft pack
@@ -91,9 +88,9 @@ jobs:
           - test_name: lxd-26.04
             cloud: lxd
             bootstrap_base: ubuntu@26.04
-          # - test_name: microk8s
-          #   cloud: microk8s
-          #   bootstrap_base: ubuntu@24.04
+          - test_name: microk8s
+            cloud: microk8s
+            bootstrap_base: ubuntu@24.04
           - test_name: k8s
             cloud: k8s
             bootstrap_base: ubuntu@24.04
@@ -112,9 +109,6 @@ jobs:
       run: sudo snap install --classic concierge
 
     - name: Prepare with concierge
-      # Concierge installs/configures the substrate (LXD / MicroK8s /
-      # Canonical K8s) and Juju here. It does NOT bootstrap a
-      # controller.
       run: sudo concierge prepare -v -c ".github/concierge-${{ matrix.cloud }}.yaml"
 
     - name: Bootstrap Juju controller on LXD
@@ -140,7 +134,7 @@ jobs:
     - name: Install uv
       uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d  # v10.0.1
 
-    - name: Run smoke integration tests
+    - name: Run integration tests
       run: |
         juju switch "concierge-${{ matrix.cloud }}"
         uv run --group integration pytest tests/integration -v \
