@@ -11,34 +11,32 @@ env:
 
 jobs:
 
-  unit-tests:
-    name: Unit tests
+  check:
+    name: Lint and run unit tests
     runs-on: ubuntu-latest
-
+    strategy:
+      matrix:
+        python: ["3.10", "3.12", "3.14"]
+    container:
+      image: python:${{ matrix.python }}
     steps:
-    - name: Checkout code
+    - name: Check out code
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-
-    - name: Set up Python
-      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
       with:
-        python-version: '3.10'
+        persist-credentials: false
 
     - name: Install uv
       uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
 
-    - name: Install dependencies for testing
-      run: |
-        uv sync --frozen --extra dev
+    - name: Run lint
+      run: make lint
 
-    - name: Run tests
-      run: |
-        source .venv/bin/activate
-        ./run_tests
+    - name: Run unit tests
+      run: make unit
 
   build:
     name: Build charm
-    needs: unit-tests
+    needs: [check]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
