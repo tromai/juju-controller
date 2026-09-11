@@ -213,14 +213,12 @@ class JujuControllerCharm(ops.CharmBase):
             self._stored.s3_status_error = "failed to reapply s3 config"
 
     def _on_collect_status(self, event: ops.CollectStatusEvent):
-        has_blocking_status = False
         if len(self._stored.last_bind_addresses) > 1:
             event.add_status(
                 ops.BlockedStatus(
                     "multiple possible DB bind addresses; set a suitable dbcluster network binding"
                 )
             )
-            has_blocking_status = True
 
         try:
             self.api_port()
@@ -228,32 +226,24 @@ class JujuControllerCharm(ops.CharmBase):
             event.add_status(
                 ops.BlockedStatus(f"cannot read controller API port from agent configuration: {e}")
             )
-            has_blocking_status = True
 
         if self._stored.tracing_status_error:
             event.add_status(ops.BlockedStatus(self._stored.tracing_status_error))
-            has_blocking_status = True
 
         if self._stored.workload_tracing_status_error:
             event.add_status(ops.BlockedStatus(self._stored.workload_tracing_status_error))
-            has_blocking_status = True
 
         if self._stored.s3_status_error:
             event.add_status(ops.BlockedStatus(self._stored.s3_status_error))
-            has_blocking_status = True
 
         if self._stored.loki_status_error:
             event.add_status(ops.BlockedStatus(self._stored.loki_status_error))
-            has_blocking_status = True
 
         if self._stored.s3_status_pending:
-            if not has_blocking_status:
-                event.add_status(ops.MaintenanceStatus("applying s3 config"))
+            event.add_status(ops.MaintenanceStatus("applying s3 config"))
             self._stored.s3_status_pending = False
-            return
 
-        if not has_blocking_status:
-            event.add_status(ops.ActiveStatus())
+        event.add_status(ops.ActiveStatus())
 
     def _on_config_changed(self, _):
         controller_url = self.config["controller-url"]
