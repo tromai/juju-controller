@@ -3,12 +3,13 @@ name = "juju-controller"
 version = "0.1.0"
 requires-python = ">=3.10"
 dependencies = [
-    "ops",
+    "ops~=3.8",
     "cosl",
 ]
 
 [project.optional-dependencies]
 dev = [
+    "codespell",
     "coverage",
     "pyright",
     "ruff",
@@ -46,3 +47,7 @@ ignore = [
 pythonVersion = "3.10"
 reportUnnecessaryTypeIgnoreComment = "error"
 include = ["src", "tests"]
+
+[tool.codespell]
+skip = "build,lib,.venv,icon.svg,.tox,.git,.mypy_cache,.ruff_cache,.coverage"
+
