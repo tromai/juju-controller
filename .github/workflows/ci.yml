@@ -116,8 +116,10 @@ jobs:
     - name: Bootstrap on MicroK8s
       if: matrix.cloud == 'microk8s'
       run: |
-        juju bootstrap microk8s "microk8s" \
-          --controller-charm-path "$GITHUB_WORKSPACE/charms/juju-controller_${{ matrix.bootstrap_base }}-amd64.charm"
+        sg snap_microk8s <<EOF
+          juju bootstrap microk8s "microk8s" \
+            --controller-charm-path "$GITHUB_WORKSPACE/charms/juju-controller_${{ matrix.bootstrap_base }}-amd64.charm"
+        EOF
 
     - name: Bootstrap on Canonical k8s
       if: matrix.cloud == 'k8s'
