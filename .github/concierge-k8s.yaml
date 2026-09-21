@@ -46,4 +46,4 @@ host:
 # file. The CI workflow appends a 2-space-indented `extra-bootstrap-args:`
 # line at EOF, which must land *inside* this block, so nothing may follow it.
 juju:
-  channel: 4.1/edge
+  channel: 4.2/edge

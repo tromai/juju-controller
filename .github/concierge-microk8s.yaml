@@ -28,4 +28,4 @@ providers:
 juju:
   # Matches the previous `snap install juju --channel 4.1/edge`; 4.1/edge
   # carries juju/juju#22795 (local --controller-charm-path on CAAS).
-  channel: 4.1/edge
+  channel: 4.2/edge
