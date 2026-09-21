@@ -24,4 +24,4 @@ juju:
   # needed for juju/juju#22795 (local --controller-charm-path on CAAS); we
   # keep the same channel on every cloud so the Juju version is consistent
   # across the matrix.
-  channel: 4.1/edge
+  channel: 4.2/edge
