@@ -7,7 +7,7 @@ juju:
     test-mode: "true"
     automatically-retry-hooks: "false"
 
-  channel: 4.1/stable
+  channel: 4.1/edge
 
 providers:
   lxd:
