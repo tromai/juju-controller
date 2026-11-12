@@ -23,16 +23,19 @@ operator behaviour without full deployment. Just `run_tests`:
 
     ./run_tests
 
-The `run_tests` script runs `ruff` lint and format checks. They will report
-error but don't fix any file. To let `ruff` fix trivial errors automatically,
-activate the virtualenv and run:
+The `run_tests` script runs:
+- `ruff` lint and format checks
+- `pyright` for type checking
+
+`ruff` checks report errors but don't modify any files. To let `ruff` fix trivial errors
+automatically, activate the virtualenv and run:
 
 ```console
 $ ruff check --preview --fix src/ tests/
 $ ruff format --preview src/ tests/
 ```
 
-We run format after check to make sure all fixes from ruff are re-formatted correctly.
+We run `ruff format` after `ruff check` to ensure that all automatic fixes are formatted correctly.
 
 ## Deploying
 

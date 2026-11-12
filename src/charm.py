@@ -303,9 +303,8 @@ class JujuControllerCharm(CharmBase):
     def _on_website_relation_joined(self, event):
         """Connect a website relation."""
         logger.info("got a new website relation: %r", event)
-        try:
-            port = self.api_port()
-        except AgentConfException:
+        port = self.api_port()
+        if port is None:
             logger.error("machine does not appear to be a controller")
             self.unit.status = BlockedStatus("machine does not appear to be a controller")
             return
@@ -351,7 +350,6 @@ class JujuControllerCharm(CharmBase):
             logger.error("cannot read controller API port from agent configuration: %s", e)
             return None
 
-        ca_cert = self.ca_cert()
         return [
             {
                 "metrics_path": "/introspection/metrics",
@@ -362,7 +360,7 @@ class JujuControllerCharm(CharmBase):
                     "password": password,
                 },
                 "tls_config": {
-                    "ca_file": ca_cert if ca_cert is not None else "",
+                    "ca_file": self.ca_cert(),
                     "server_name": "juju-apiserver",
                 },
             }
@@ -638,19 +636,21 @@ class JujuControllerCharm(CharmBase):
             raise AgentConfException("runtime.conf key 'api-addresses' is not a list")
 
         parsed_url = urllib.parse.urlsplit("//" + api_addresses[0])
-        if parsed_url.port is None:
+        # The port attribute is an int if present, else it's None.
+        # This check is intentional, as port 0 is not a usable port.
+        if not parsed_url.port:
             raise AgentConfException("API address does not include port")
         return parsed_url.port
 
     def ca_cert(self) -> str | None:
         """Return the controller's CA certificate."""
         ca_cert = self._controller_runtime_config("ca-cert")
-        if ca_cert is None or not isinstance(ca_cert, str):
+        if not isinstance(ca_cert, str):
             return None
 
         return ca_cert
 
-    def _controller_runtime_config(self, key: str) -> Any | None:
+    def _controller_runtime_config(self, key: str) -> Any:
         """Read a value (by key) from the runtime.conf file on disk.
 
         In snap mode the file is read from the current revision symlink;

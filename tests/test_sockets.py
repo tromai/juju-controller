@@ -24,7 +24,7 @@ class TestClass(unittest.TestCase):
         mock_opener = MockOpener(self)
         control_socket = ControlSocketClient(
             "fake_socket_path",
-            opener=mock_opener,  # type: ignore
+            opener=mock_opener,  # pyright: ignore[reportArgumentType]
         )
 
         mock_opener.expect(
@@ -42,7 +42,7 @@ class TestClass(unittest.TestCase):
         mock_opener = MockOpener(self)
         control_socket = ControlSocketClient(
             "fake_socket_path",
-            opener=mock_opener,  # type: ignore
+            opener=mock_opener,  # pyright: ignore[reportArgumentType]
         )
 
         mock_opener.expect(
@@ -69,7 +69,7 @@ class TestClass(unittest.TestCase):
         mock_opener = MockOpener(self)
         control_socket = ControlSocketClient(
             "fake_socket_path",
-            opener=mock_opener,  # type: ignore
+            opener=mock_opener,  # pyright: ignore[reportArgumentType]
         )
 
         mock_opener.expect(
@@ -87,7 +87,7 @@ class TestClass(unittest.TestCase):
         mock_opener = MockOpener(self)
         control_socket = ControlSocketClient(
             "fake_socket_path",
-            opener=mock_opener,  # type: ignore
+            opener=mock_opener,  # pyright: ignore[reportArgumentType]
         )
 
         mock_opener.expect(
@@ -114,7 +114,7 @@ class TestClass(unittest.TestCase):
         mock_opener = MockOpener(self)
         control_socket = ControlSocketClient(
             "fake_socket_path",
-            opener=mock_opener,  # type: ignore
+            opener=mock_opener,  # pyright: ignore[reportArgumentType]
         )
 
         mock_opener.expect(
@@ -141,7 +141,7 @@ class TestClass(unittest.TestCase):
         mock_opener = MockOpener(self)
         control_socket = ControlSocketClient(
             "fake_socket_path",
-            opener=mock_opener,  # type: ignore
+            opener=mock_opener,  # pyright: ignore[reportArgumentType]
         )
 
         mock_opener.expect(
@@ -174,7 +174,7 @@ class TestClass(unittest.TestCase):
 
     def test_add_s3_config_success(self):
         mock_opener = MockOpener(self)
-        control_socket = ControlSocketClient("fake_socket_path", opener=mock_opener)  # type: ignore
+        control_socket = ControlSocketClient("fake_socket_path", opener=mock_opener)  # pyright: ignore[reportArgumentType]
 
         mock_opener.expect(
             url="http://localhost/s3-config",
@@ -202,7 +202,7 @@ class TestClass(unittest.TestCase):
 
     def test_add_s3_config_fail(self):
         mock_opener = MockOpener(self)
-        control_socket = ControlSocketClient("fake_socket_path", opener=mock_opener)  # type: ignore
+        control_socket = ControlSocketClient("fake_socket_path", opener=mock_opener)  # pyright: ignore[reportArgumentType]
 
         mock_opener.expect(
             url="http://localhost/s3-config",
@@ -237,7 +237,7 @@ class TestClass(unittest.TestCase):
 
     def test_remove_s3_config_success(self):
         mock_opener = MockOpener(self)
-        control_socket = ControlSocketClient("fake_socket_path", opener=mock_opener)  # type: ignore
+        control_socket = ControlSocketClient("fake_socket_path", opener=mock_opener)  # pyright: ignore[reportArgumentType]
 
         mock_opener.expect(
             url="http://localhost/s3-config",
@@ -253,7 +253,7 @@ class TestClass(unittest.TestCase):
 
     def test_remove_s3_config_fail(self):
         mock_opener = MockOpener(self)
-        control_socket = ControlSocketClient("fake_socket_path", opener=mock_opener)  # type: ignore
+        control_socket = ControlSocketClient("fake_socket_path", opener=mock_opener)  # pyright: ignore[reportArgumentType]
 
         mock_opener.expect(
             url="http://localhost/s3-config",
@@ -278,7 +278,7 @@ class TestClass(unittest.TestCase):
         mock_opener = MockOpener(self)
         control_socket = ControlSocketClient(
             "fake_socket_path",
-            opener=mock_opener,  # type: ignore
+            opener=mock_opener,  # pyright: ignore[reportArgumentType]
         )
 
         mock_opener.expect(
@@ -304,7 +304,7 @@ class TestClass(unittest.TestCase):
         mock_opener = MockOpener(self)
         control_socket = ControlSocketClient(
             "fake_socket_path",
-            opener=mock_opener,  # type: ignore
+            opener=mock_opener,  # pyright: ignore[reportArgumentType]
         )
 
         mock_opener.expect(
@@ -338,7 +338,7 @@ class TestClass(unittest.TestCase):
         mock_opener = MockOpener(self)
         control_socket = ControlSocketClient(
             "fake_socket_path",
-            opener=mock_opener,  # type: ignore
+            opener=mock_opener,  # pyright: ignore[reportArgumentType]
         )
 
         mock_opener.expect(
@@ -356,7 +356,7 @@ class TestClass(unittest.TestCase):
         mock_opener = MockOpener(self)
         control_socket = ControlSocketClient(
             "fake_socket_path",
-            opener=mock_opener,  # type: ignore
+            opener=mock_opener,  # pyright: ignore[reportArgumentType]
         )
 
         mock_opener.expect(
@@ -382,7 +382,7 @@ class TestClass(unittest.TestCase):
         mock_opener = MockOpener(self)
         control_socket = ControlSocketClient(
             "fake_socket_path",
-            opener=mock_opener,  # type: ignore
+            opener=mock_opener,  # pyright: ignore[reportArgumentType]
         )
 
         mock_opener.expect(
@@ -399,7 +399,7 @@ class TestClass(unittest.TestCase):
         mock_opener = MockOpener(self)
         config_reload_socket = ConfigChangeSocketClient(
             "fake_socket_path",
-            opener=mock_opener,  # type: ignore
+            opener=mock_opener,  # pyright: ignore[reportArgumentType]
         )
 
         mock_opener.expect(
@@ -418,7 +418,7 @@ class TestClass(unittest.TestCase):
         mock_opener = MockOpener(self)
         config_reload_socket = ConfigChangeSocketClient(
             "fake_socket_path",
-            opener=mock_opener,  # type: ignore
+            opener=mock_opener,  # pyright: ignore[reportArgumentType]
         )
 
         mock_opener.expect(

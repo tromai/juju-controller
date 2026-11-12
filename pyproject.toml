@@ -46,3 +46,4 @@ ignore = [
 pythonVersion = "3.10"
 reportUnnecessaryTypeIgnoreComment = "error"
 include = ["src", "tests"]
+extraPaths = ["lib"]
