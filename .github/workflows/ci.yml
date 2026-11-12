@@ -1,4 +1,8 @@
 name: "CI"
+# We don't run this workflow on 'pull_request', because we require secrets to
+# upload the charm to Charmhub, and pull_request runs can't access secrets.
+# PRs should be opened from a branch on the main juju/juju-controller repo,
+# not from a fork.
 on:
   push:
   workflow_dispatch:
@@ -27,33 +31,34 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # Checks out TEST_REF (the branch under test), not necessarily this
-    # workflow's own ref -- see the workflow_dispatch `ref` input above.
-    - name: Checkout code
-      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      with:
-        ref: ${{ env.TEST_REF }}
+      # Checks out TEST_REF (the branch under test), not necessarily this
+      # workflow's own ref -- see the workflow_dispatch `ref` input above.
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.TEST_REF }}
+          persist-credentials: false
 
-    - name: Set up Python
-      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-      with:
-        python-version: '3.10'
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.10'
 
-    - name: Install uv
-      run: pip install uv
+      - name: Install uv
+        run: pip install uv
 
-    - name: Create uv virtualenv
-      run: uv venv
+      - name: Create uv virtualenv
+        run: uv venv
 
-    - name: Install dependencies for testing
-      run: |
-        source .venv/bin/activate
-        uv pip install ".[dev]"
+      - name: Install dependencies for testing
+        run: |
+          source .venv/bin/activate
+          uv pip install ".[dev]"
 
-    - name: Run tests
-      run: |
-        source .venv/bin/activate
-        ./run_tests
+      - name: Run tests
+        run: |
+          source .venv/bin/activate
+          ./run_tests
 
   build:
     name: Build charm
@@ -65,14 +70,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ env.TEST_REF }}
-
-      - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: '3.10'
-
-      - name: Install uv
-        run: pip install uv
+          persist-credentials: false
 
       # NOTE: the build job checks out TEST_REF -- an arbitrary branch (or even
       # a fork) selected via the workflow_dispatch `ref` input, which may not
@@ -86,13 +84,14 @@ jobs:
         run: sudo snap install --classic concierge
 
       - name: Prepare with concierge
-        # --charmcraft-channel preserves the previous pin (`snap install
-        # charmcraft --channel=latest/stable`; "no 4.x track yet").
-        run: sudo concierge prepare -v -p crafts --charmcraft-channel latest/stable
+        # We use latest because there's no 4.x track of charmcraft yet.
+        run: |
+          sudo concierge prepare -v -p crafts \
+            --charmcraft-channel latest/stable
 
       - name: Pack charm
-        # Still wrapped in `sg lxd` so the freshly-added lxd group membership
-        # is active in this shell (group changes don't apply to the current
+        # Wrapped in `sg lxd` so the freshly-added lxd group membership is
+        # active in this shell (group changes don't apply to the current
         # login session otherwise).
         run: sg lxd -c "charmcraft pack"
 
@@ -102,163 +101,260 @@ jobs:
           name: charm
           path: "*.charm"
 
-  integration:
-    name: "Integration tests (${{ matrix.test_name }})"
+  channel:
+    name: Select Charmhub channel
     runs-on: ubuntu-latest
+    outputs:
+      test: ${{ steps.channel.outputs.test }}
+      release: ${{ steps.channel.outputs.release }}
+
+    steps:
+      - name: Select Charmhub channel
+        id: channel
+        shell: bash
+        run: |
+          set -eux
+          case ${{ github.ref_name }} in
+            3.* | 4.*)
+              TRACK=$(echo "${{ github.ref_name }}" | awk -F "-" '{print $1}')
+              DO_RELEASE=true
+              ;;
+            main)
+              TRACK="latest"
+              DO_RELEASE=true
+              ;;
+            *)
+              TRACK="latest"
+              DO_RELEASE=false  # Don't release feature branches
+              ;;
+          esac
+
+          # Feature branches will be released to the 'latest' track, so we need
+          # to include the branch name to disambiguate.
+          BRANCH="${{ github.ref_name }}-${{ github.sha }}"
+
+          echo "test=$TRACK/edge/$BRANCH" >> "$GITHUB_OUTPUT"
+          if [[ "$DO_RELEASE" == 'true' ]]; then
+            echo "release=$TRACK/edge" >> "$GITHUB_OUTPUT"
+          fi
+
+  upload:
+    name: Upload to Charmhub
+    needs: [build, channel]
+    runs-on: ubuntu-latest
+    # Uploading needs the CHARMCRAFT_AUTH secret, which only the upstream repo
+    # has, so skip (rather than fail) on forks. Also skip when testing another
+    # ref via workflow_dispatch: the channel is derived from *this* ref's name.
+    if: github.repository == 'juju/juju-controller' && !inputs.ref
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download packed charm
+        id: download
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: charm
+
+      - name: Upload charms to Charmhub
+        env:
+          CHARMCRAFT_AUTH: ${{ secrets.CHARMCRAFT_AUTH }}
+        run: |
+          # We use latest because there's no 4.x track yet.
+          sudo snap install charmcraft --channel latest/stable --classic
+          for FILE in *.charm; do
+            echo "Uploading: $FILE"
+            charmcraft upload --name "$CHARM_NAME" \
+              --release "${{ needs.channel.outputs.test }}" "$FILE"
+          done
+
+  integration:
+    name: Integration tests (${{ matrix.test_name }})
+    runs-on: ubuntu-latest
+    # The controller is bootstrapped from the charm built by the `build` job
+    # (--controller-charm-path), not from Charmhub, so this doesn't need the
+    # `upload` job (or its secrets) and also runs on forks.
     needs: [build]
+    env:
+      # Fail, rather than silently re-lock, if uv.lock is out of date.
+      UV_LOCKED: "1"
     strategy:
       fail-fast: false
       matrix:
+        # cloud:      Juju cloud of the controller under test. It's also the
+        #             controller's name.
+        # concierge:  .github/concierge-<concierge>.yaml to provision with.
+        # charm_base: Which packed charm to bootstrap with. On LXD this is
+        #             also the controller's --bootstrap-base; that flag is
+        #             IAAS-only, so it's not passed on Kubernetes clouds.
+        # k8s_controller: If set, also bootstrap a controller with this name
+        #             on the `k8s` cloud, to host prometheus-k8s for the
+        #             cross-controller test (test_prometheus_cmr.py).
         include:
           - test_name: lxd-22.04
             cloud: lxd
-            bootstrap_base: ubuntu@22.04
+            concierge: lxd
+            charm_base: ubuntu@22.04
           - test_name: lxd-24.04
             cloud: lxd
-            bootstrap_base: ubuntu@24.04
+            concierge: lxd
+            charm_base: ubuntu@24.04
           - test_name: lxd-26.04
             cloud: lxd
-            bootstrap_base: ubuntu@26.04
+            concierge: lxd
+            charm_base: ubuntu@26.04
           - test_name: microk8s
             cloud: microk8s
-            # CAAS bootstrap rejects --bootstrap-base entirely (it's an
-            # IAAS-only flag), so this is only used below to pick which
-            # packed charm artifact to upload, not passed to `juju bootstrap`.
-            bootstrap_base: ubuntu@24.04
+            concierge: microk8s
+            charm_base: ubuntu@24.04
           - test_name: k8s
             cloud: k8s
-            bootstrap_base: ubuntu@24.04
-    # NOTE: local --controller-charm-path used to be hard-rejected on k8s
-    # clouds ( "deploying a local controller charm on a k8s controller not
-    # supported", see juju/juju#14586). That restriction was lifted by
-    # juju/juju#22795 ("feat: bootstrap controller charm on CAAS"), which
-    # landed after the 4.1-beta1 build. We install Juju from 4.1/edge below
-    # to pick up that fix.
+            concierge: k8s
+            charm_base: ubuntu@24.04
+          # The upstream juju/juju controllercharm suite runs its
+          # cross-controller Prometheus test with the controller under test
+          # on a machine cloud and Prometheus on a second, k8s controller.
+          - test_name: lxd-24.04-cross-controller-k8s
+            cloud: lxd
+            concierge: lxd-k8s
+            charm_base: ubuntu@24.04
+            k8s_controller: k8s
 
     steps:
-    # NOTE: deliberately checks out the *workflow's own* ref here, not
-    # ${{ env.TEST_REF }}. This job only needs tests/integration/ and the
-    # `integration` extra in pyproject.toml, which live on the branch this
-    # workflow file itself lives on. The actual charm under test comes
-    # entirely from the `charm` artifact built by the `build` job (from
-    # TEST_REF), so this job never depends on the target branch having any
-    # test files.
-    - name: Checkout code
-      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # NOTE: deliberately checks out the *workflow's own* ref here, not
+      # ${{ env.TEST_REF }}. This job only needs tests/integration/, the
+      # concierge configs, and the `integration` dependency group in
+      # pyproject.toml/uv.lock, which live on the branch this workflow file
+      # itself lives on. The actual charm under test comes entirely from the
+      # `charm` artifact built by the `build` job (from TEST_REF), so this job
+      # never depends on the target branch having any test files.
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-    - name: Download packed charm
-      id: download
-      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-      with:
-        name: charm
+      - name: Download packed charm
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: charm
 
-    - name: Save charmcraft logs as artifact
-      if: always() && steps.charmcraft.outcome != 'skipped'
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-      with:
-        name: charmcraft-upload-logs-${{ matrix.test_name }}
-        path: ~/.local/state/charmcraft/log/
-      continue-on-error: true
+      - name: Find packed charm path
+        id: charm
+        # The build job packs one .charm per platform declared in
+        # charmcraft.yaml (e.g. juju-controller_ubuntu@22.04-amd64.charm). Pick
+        # the one matching this matrix job's base.
+        run: |
+          CHARM_FILE="juju-controller_${{ matrix.charm_base }}-amd64.charm"
+          if [[ ! -f "$CHARM_FILE" ]]; then
+            echo "No packed charm found: $CHARM_FILE" >&2
+            ls -1 -- *.charm >&2 || true
+            exit 1
+          fi
+          echo "path=$(readlink -f "$CHARM_FILE")" >> "$GITHUB_OUTPUT"
 
-    - name: Find packed charm path
-      id: charm
-      # The build job packs one .charm per platform declared in
-      # charmcraft.yaml (e.g. juju-controller_ubuntu@22.04-amd64.charm). Pick
-      # the file matching *this* matrix job's base, instead of just grabbing
-      # the alphabetically-first .charm file (which would silently bootstrap
-      # every base with the 22.04 build).
-      run: |
-        BASE="${{ matrix.bootstrap_base }}"
-        CHARM_FILE="$(ls -1 juju-controller_${BASE}-*.charm | head -n1)"
-        if [[ -z "$CHARM_FILE" ]]; then
-          echo "No packed charm found for base ${BASE}" >&2
-          ls -1 *.charm >&2 || true
-          exit 1
-        fi
-        CHARM_PATH="$(readlink -f "$CHARM_FILE")"
-        echo "path=$CHARM_PATH" >> "$GITHUB_OUTPUT"
+      - name: Install concierge
+        run: sudo snap install --classic concierge
 
-    - name: Install concierge
-      run: sudo snap install --classic concierge
+      - name: Prepare with concierge
+        # Installs Juju and provisions the cloud(s), but doesn't bootstrap: the
+        # configs set `bootstrap: false`, because the bootstrap needs per-job
+        # arguments (charm path, base). See the steps below.
+        run: |
+          sudo concierge prepare -v \
+            -c ".github/concierge-${{ matrix.concierge }}.yaml"
 
-    - name: Prepare with concierge
-      # Concierge now provisions the substrate (LXD / MicroK8s / Canonical
-      # K8s), installs Juju from 4.1/edge (channel is set in each config), and
-      # bootstraps the controller -- replacing the old canonical/setup-lxd +
-      # balchua/microk8s-actions + `snap install juju` + hand-rolled `juju
-      # bootstrap` steps.
-      #
-      # The per-cloud config files (.github/concierge-<cloud>.yaml) hold the
-      # static provider settings. The dynamic, per-matrix-job bootstrap args
-      # (controller charm path, and for LXD the bootstrap base) can't live in
-      # a static file, so we append them as `extra-bootstrap-args` to a copy
-      # of the config here. `extra-bootstrap-args` is appended verbatim to
-      # every `juju bootstrap` concierge runs, exactly reproducing the flags
-      # the previous per-cloud bootstrap steps passed:
-      #   lxd:      --bootstrap-base=<base> --controller-charm-path=<path>
-      #   microk8s: --controller-charm-path=<path>   (base is IAAS-only)
-      #   k8s:      --controller-charm-path=<path>
-      run: |
-        CONFIG="$(mktemp --suffix=.yaml)"
-        cp ".github/concierge-${{ matrix.cloud }}.yaml" "$CONFIG"
+      - name: Bootstrap on LXD
+        if: matrix.cloud == 'lxd'
+        # Concierge makes the LXD socket accessible to the runner user, so this
+        # doesn't need `sg lxd`.
+        run: |
+          juju bootstrap localhost lxd \
+            --bootstrap-base=${{ matrix.charm_base }} \
+            --controller-charm-path=${{ steps.charm.outputs.path }}
 
-        BOOTSTRAP_ARGS="--controller-charm-path=${{ steps.charm.outputs.path }}"
-        # --bootstrap-base is IAAS-only; only pass it on LXD, matching the
-        # previous behaviour where MicroK8s/K8s deliberately omitted it.
-        if [ "${{ matrix.cloud }}" = "lxd" ]; then
-          BOOTSTRAP_ARGS="--bootstrap-base=${{ matrix.bootstrap_base }} $BOOTSTRAP_ARGS"
-        fi
+      - name: Bootstrap on MicroK8s
+        if: matrix.cloud == 'microk8s'
+        # The runner user was added to the snap_microk8s group by concierge, but
+        # that doesn't apply to this already-running login session, hence `sg`.
+        # Controller pods can take a while to expose their API on busy runners,
+        # hence the longer bootstrap timeout.
+        run: |
+          sg snap_microk8s -c "juju bootstrap microk8s microk8s \
+            --config bootstrap-timeout=1800 \
+            --controller-charm-path=${{ steps.charm.outputs.path }}"
 
-        # `extra-bootstrap-args` lives under the top-level `juju:` block, which
-        # every config file already defines.
-        printf '  extra-bootstrap-args: %s\n' "$BOOTSTRAP_ARGS" >> "$CONFIG"
+      - name: Bootstrap on Canonical K8s
+        if: matrix.cloud == 'k8s' || matrix.k8s_controller
+        run: |
+          juju bootstrap k8s "${{ matrix.k8s_controller || 'k8s' }}" \
+            --config bootstrap-timeout=1800 \
+            --bootstrap-constraints root-disk=2G \
+            --controller-charm-path=${{ steps.charm.outputs.path }}
 
-        echo "::group::Effective concierge config"
-        cat "$CONFIG"
-        echo "::endgroup::"
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
 
-        sudo concierge prepare -v -c "$CONFIG"
+      - name: Run integration tests
+        # --juju-controller selects the controller under test (and where
+        # pytest-jubilant creates temporary models). Tests that need
+        # prometheus-k8s skip themselves unless that controller is on a
+        # Kubernetes cloud, or unless --k8s-controller is passed, so no
+        # per-cloud test selection is needed here.
+        #
+        # --log-cli-level=INFO shows Jubilant's logs live, see:
+        # https://canonical.com/juju/docs/ops/latest/howto/write-integration-tests-for-a-charm/#configure-jubilant-logs
+        # --log-file keeps DEBUG-level logs (including status diffs) as a build
+        # artifact, and --juju-dump-logs saves the `juju debug-log` of every
+        # model created by pytest-jubilant before it's torn down.
+        env:
+          K8S_CONTROLLER: ${{ matrix.k8s_controller }}
+        run: |
+          mkdir -p logs
+          uv run --group integration pytest tests/integration -vv \
+            --log-cli-level=INFO \
+            --log-file=logs/verbose.log \
+            --log-file-level=DEBUG \
+            --juju-dump-logs=logs/juju-debug-log \
+            --juju-controller=${{ matrix.cloud }} \
+            ${K8S_CONTROLLER:+--k8s-controller="$K8S_CONTROLLER"}
 
-    - name: Install uv
-      uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - name: Get Juju info for debugging
+        if: failure()
+        env:
+          K8S_CONTROLLER: ${{ matrix.k8s_controller }}
+        run: |
+          set -x
+          set +e
+          juju controllers
+          for CONTROLLER in ${{ matrix.cloud }} $K8S_CONTROLLER; do
+            juju models -c "$CONTROLLER"
+            juju status -m "$CONTROLLER:controller" --relations
+            juju debug-log -m "$CONTROLLER:controller" --replay --no-tail
+          done
 
-    - name: Run integration tests
-      # test_prometheus.py is marked `prometheus` because it needs a
-      # Kubernetes cloud to deploy prometheus-k8s into. Only microk8s
-      # provides that here, so deselect the marker on every other cloud via
-      # pytest's `-m` option instead of maintaining two separate steps.
-      #
-      # --log-cli-level=DEBUG enables Jubilant's verbose logging (see the
-      # [tool.pytest.ini_options] log_cli_format in pyproject.toml), see:
-      # https://canonical.com/juju/docs/ops/latest/howto/write-integration-tests-for-a-charm/#example-of-verbose-logging
-      #
-      # --log-file writes the same verbose logs to a file so they're
-      # available as a build artifact even when the step succeeds (the
-      # console output above is trimmed/collapsed in the GitHub UI), see:
-      # https://canonical.com/juju/docs/ops/latest/howto/write-integration-tests-for-a-charm/#log-to-a-file
-      #
-      # --juju-dump-logs saves the full `juju debug-log` output for every
-      # model created by the `juju`/`juju_factory` fixtures, see:
-      # https://canonical.com/juju/docs/ops/latest/howto/write-integration-tests-for-a-charm/#view-juju-debug-log-logs
-      run: |
-        MARKEXPR="not prometheus"
-        if [ "${{ matrix.cloud }}" = "microk8s" ] || [ "${{ matrix.cloud }}" = "k8s" ]; then
-          MARKEXPR=""
-        fi
-        mkdir -p logs
-        uv run --extra integration pytest tests/integration/ -vv \
-          --log-cli-level=INFO \
-          --log-file=logs/verbose.log \
-          --juju-dump-logs=logs/juju-debug-log \
-          ${MARKEXPR:+-m "$MARKEXPR"}
+      - name: Get MicroK8s pod info for debugging
+        if: failure() && matrix.cloud == 'microk8s'
+        run: |
+          sg snap_microk8s <<EOF
+            microk8s.kubectl -n controller-microk8s get all
+            microk8s.kubectl -n controller-microk8s get -o yaml pod/controller-0
+          EOF
 
-    - name: Upload integration test logs
-      if: ${{ !cancelled() }}
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-      with:
-        name: integration-test-logs-${{ matrix.test_name }}
-        path: logs
+      - name: Get Canonical K8s pod info for debugging
+        if: failure() && (matrix.cloud == 'k8s' || matrix.k8s_controller)
+        run: |
+          NAMESPACE="controller-${{ matrix.k8s_controller || 'k8s' }}"
+          sudo k8s kubectl -n "$NAMESPACE" get all
+          sudo k8s kubectl -n "$NAMESPACE" get -o yaml pod/controller-0
 
-    # TODO: test integration with dashboard / ha-proxy
-    # TODO: re-introduce the Jubilant-based integration tests
-    # (tests/integration/) once they're revisited.
+      - name: Upload integration test logs
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: integration-test-logs-${{ matrix.test_name }}
+          path: logs
+
+      # TODO: test integration with dashboard / ha-proxy

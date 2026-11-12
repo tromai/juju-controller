@@ -12,11 +12,13 @@ dev = [
     "coverage",
     "ruff",
 ]
+
+[dependency-groups]
+# Integration test dependencies, used with `uv run --group integration ...`.
 integration = [
-    "jubilant",
+    "jubilant>=1.12",
     "pytest",
-    "pytest-jubilant",
-    "pyyaml",
+    "pytest-jubilant>=2.2",
 ]
 
 [tool.ruff]
@@ -47,15 +49,13 @@ ignore = [
     "N818",  # error-suffix-on-exception-name
 ]
 
-# Configure Jubilant logs for integration tests, following the "verbose
-# logging" example from:
-# https://canonical.com/juju/docs/ops/latest/howto/write-integration-tests-for-a-charm/#example-of-verbose-logging
-#
-# Verbose logging requires the pytest invocation to pass --log-cli-level=DEBUG
-# (see the `Run integration tests` step in .github/workflows/ci.yml).
+# Configure Jubilant logs for integration tests, following:
+# https://canonical.com/juju/docs/ops/latest/howto/write-integration-tests-for-a-charm/#configure-jubilant-logs
+# Pass --log-cli-level=INFO (or DEBUG, for status diffs) to see them live, and
+# --log-file=<path> to keep them.
 [tool.pytest.ini_options]
 markers = [
-    "prometheus: needs a Kubernetes cloud to deploy prometheus-k8s into (e.g. microk8s)",
+    "prometheus: ports of juju/juju's controllercharm/prometheus.sh; deploy prometheus-k8s",
 ]
 
 log_cli_format = "%(asctime)s %(levelname)s %(name)s %(message)s"

@@ -1,49 +1,24 @@
-# Concierge config for the Canonical K8s (CAAS) integration test job.
+# Concierge config for the Canonical K8s integration test job.
 #
-# The CI workflow appends an `extra-bootstrap-args` line to a copy of this
-# file at runtime (see the `Prepare with concierge` step in
-# .github/workflows/ci.yml), carrying the per-job controller charm path:
-#   --controller-charm-path=<abs path>   (the packed charm built by the build job)
+# Concierge installs Juju and Canonical K8s, but doesn't bootstrap: the CI
+# workflow runs `juju bootstrap` itself (see `Bootstrap on Canonical K8s` in
+# .github/workflows/ci.yml), because it needs the per-job
+# --controller-charm-path. With `bootstrap: false`, concierge ignores
+# `model-defaults`, `bootstrap-constraints` and `extra-bootstrap-args`.
 #
-# This reproduces the previous flow, which ran `concierge prepare
-# --juju-channel=4.1/edge` and then bootstrapped k8s by hand:
-#   juju bootstrap k8s c --controller-charm-path=${{ steps.charm.outputs.path }}
-# The Juju channel now lives in this config (see the `juju:` block below)
-# instead of a CLI flag so it's consistent with the lxd/microk8s configs.
+# LXD isn't enabled: the charm is packed in the separate build job.
+juju:
+  # charmcraft.yaml declares `assumes: juju >= 4.2`.
+  channel: 4.2/edge
+
 providers:
-  lxd:
-    enable: true
-    # Only k8s is the controller substrate for this job; don't bootstrap a
-    # second (lxd) controller. LXD stays enabled/installed as before.
-    bootstrap: false
   k8s:
     enable: true
-    # Previously bootstrapped by hand after `concierge prepare`; concierge now
-    # bootstraps it directly so the controller charm path can be passed via
-    # extra-bootstrap-args.
-    bootstrap: true
-    bootstrap-constraints:
-      root-disk: "2G"
+    bootstrap: false
+    # The features of concierge's built-in `k8s` preset.
     features:
       load-balancer:
         l2-mode: "true"
         cidrs: "10.43.45.0/28"
       local-storage: {}
       network: {}
-
-host:
-  packages:
-    - gnome-keyring
-    - python3-pip
-    - python3-venv
-  snaps:
-    charmcraft:
-    jq:
-    yq:
-    rockcraft:
-
-# NOTE: the `juju:` block is intentionally the LAST top-level block in this
-# file. The CI workflow appends a 2-space-indented `extra-bootstrap-args:`
-# line at EOF, which must land *inside* this block, so nothing may follow it.
-juju:
-  channel: 4.2/edge

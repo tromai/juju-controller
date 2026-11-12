@@ -1,18 +1,19 @@
-"""Jubilant + pytest-jubilant port of `suites/controllercharm/prometheus.sh`.
+# Copyright 2026 Canonical Ltd.
+# Licensed under the GPLv3, see LICENSE file for details.
 
-Specifically, this ports the ``run_prometheus_cross_controller`` bash function.
+"""Port of ``run_prometheus_cross_controller`` from juju/juju's ``controllercharm/prometheus.sh``.
 
-Bash function being ported:
+Upstream (https://github.com/juju/juju/blob/main/tests/suites/controllercharm/prometheus.sh)::
 
     run_prometheus_cross_controller() {
-        CONTROLLER_MODEL_NAME="test-prometheus-cmr-ctrlr"
-        bootstrap "${CONTROLLER_MODEL_NAME}" "${file}"     # ctrl on default cloud
+        bootstrap "test-prometheus-cmr-ctrlr" "${file}"
         CONTROLLER_NAME=$(juju controllers --format json | yq -r '."current-controller"')
 
+        # Prometheus must be deployed on k8s. By default, we choose microk8s, but you
+        # can set the K8S_CLOUD environment variable to select a different cluster.
         K8S_CLOUD=${K8S_CLOUD:-microk8s}
-        PROMETHEUS_MODEL_NAME="test-prometheus-cmr-prom"
-        BOOTSTRAP_PROVIDER='k8s' BOOTSTRAP_CLOUD="${K8S_CLOUD}" \
-            bootstrap "${PROMETHEUS_MODEL_NAME}" "${file}"  # 2nd controller on k8s
+        BOOTSTRAP_PROVIDER='k8s' BOOTSTRAP_CLOUD="${K8S_CLOUD}" \\
+            bootstrap "test-prometheus-cmr-prom" "${file}"
 
         juju offer -c "${CONTROLLER_NAME}" controller.controller:metrics-endpoint
 
@@ -22,125 +23,58 @@ Bash function being ported:
         retry 'check_prometheus_targets prometheus-k8s 0' 30
 
         juju remove-relation prometheus-k8s controller
+        # Check Juju controller is removed from Prometheus targets
         retry 'check_prometheus_no_target prometheus-k8s 0' 30
-        juju status -m controller --format json | yq -r "$(active_condition "controller")"
-        | check "controller"
-        juju status --format json | yq -r "$(active_condition "prometheus-k8s")"
-        | check "prometheus-k8s"
+        # Check no errors in controller charm or Prometheus
+        retry 'check_controller_charm_active' 10
+        retry 'check_app_active prometheus-k8s' 10
 
-        juju remove-application prometheus-k8s --destroy-storage --no-prompt \
-            --force --no-wait
-        destroy_controller "${PROMETHEUS_MODEL_NAME}"
+        juju remove-application prometheus-k8s --destroy-storage --no-prompt \\
+            --force --no-wait # TODO: remove these flags once storage bug is fixed
+        destroy_controller "test-prometheus-cmr-prom"
     }
 
-The flow exercises **cross-controller relations**: the controller charm lives
-on the source controller (reached via the ``controller`` fixture), and
-prometheus-k8s lives on a pre-existing Kubernetes controller/model (reached
-via the ``k8s_juju`` fixture -- see conftest.py for the
-``JUJU_ITEST_K8S_MODEL`` env var that selects it). prometheus scrapes the
-controller metrics from across the controller boundary.
-
-The wait / active / scrape-target checks are expressed directly in terms of
-Jubilant's primitives -- we only add custom logic where Jubilant genuinely
-can't help (the Prometheus HTTP target check, which lives inside the
-prometheus-k8s unit and isn't visible in `juju status`, and the cross-
-controller offer/consume/integrate dance). Both live in `_helpers.py`,
-shared with `test_prometheus.py` and `test_prometheus_multi.py`.
-
-NOT bootstrapped here -- both controllers are assumed to already exist.
-
-Run with::
-
-    JUJU_ITEST_K8S_MODEL=ctrl-k8s:cos \
-    pytest tests/integration/test_prometheus_cmr.py -v
+This exercises a cross-controller relation: the controller charm lives on
+the controller under test (any cloud), and prometheus-k8s lives in a
+temporary model on a second, pre-existing controller on a Kubernetes cloud,
+passed with ``--k8s-controller`` (the equivalent of upstream's
+``K8S_CLOUD``). The test is skipped if that option isn't set. The temporary
+model is created and destroyed by pytest-jubilant's ``juju_factory``, using
+its per-model ``controller`` override.
 """
 
 from __future__ import annotations
 
+import _helpers
 import jubilant
 import pytest
+import pytest_jubilant
 
-import _helpers
-
-# ---------------------------------------------------------------------------
-# The ported test
-# ---------------------------------------------------------------------------
+pytestmark = pytest.mark.prometheus
 
 
-OFFER_NAME = 'prom-targets'
-CONSUMER_ALIAS = 'controller-targets'
+@pytest.fixture(scope="module")
+def juju(juju_factory: pytest_jubilant.JujuFactory, k8s_controller: str) -> jubilant.Juju:
+    """Temporary model for prometheus-k8s on the ``--k8s-controller`` controller."""
+    # Overrides pytest-jubilant's `juju` fixture, which uses --juju-controller.
+    return juju_factory.get_juju("", controller=k8s_controller)
 
 
-@pytest.mark.prometheus
 def test_run_prometheus_cross_controller(
-    k8s_juju: jubilant.Juju,
-    controller: jubilant.Juju,
-) -> None:
-    """Direct port of `run_prometheus_cross_controller` from prometheus.sh."""
-    juju = k8s_juju
+    juju: jubilant.Juju, controller: jubilant.Juju, metrics_offer: str
+):
+    # juju deploy prometheus-k8s --channel 1/stable --trust
+    # juju relate prometheus-k8s "${CONTROLLER_NAME}:controller.controller"
+    juju.deploy("prometheus-k8s", channel="1/stable", trust=True)
+    juju.consume(metrics_offer, "controller")
+    juju.integrate("prometheus-k8s", "controller")
 
-    # ---- Offer the controller charm's metrics-endpoint from the source
-    # controller model, consume it on the k8s model, and integrate the
-    # prometheus-k8s app. Equivalent to:
-    #     juju offer -c "${CONTROLLER_NAME}" controller.controller:metrics-endpoint
-    #     juju deploy prometheus-k8s --channel 1/stable --trust
-    #     juju relate prometheus-k8s "${CONTROLLER_NAME}:controller.controller"
-    juju.deploy('prometheus-k8s', channel='1/stable', trust=True)
-    _helpers.cross_model_integrate(
-        offerer=controller,
-        offerer_app='controller',
-        offerer_endpoint='metrics-endpoint',
-        offer_name=OFFER_NAME,
-        consumer=juju,
-        consumer_app='prometheus-k8s',
-        alias=CONSUMER_ALIAS,
-    )
+    juju.wait(_helpers.unit_active_idle("prometheus-k8s", 0), timeout=_helpers.DEPLOY_TIMEOUT)
+    _helpers.wait_for_controller_target(juju, "prometheus-k8s", 0)
 
-    # ---- Wait for prometheus-k8s/0 to be active+idle and for Prometheus
-    # to have scraped the controller across the controller boundary.
-    # Equivalent to:
-    #     wait_for "prometheus-k8s" "$(active_idle_condition "prometheus-k8s" 0)"
-    #     retry 'check_prometheus_targets prometheus-k8s 0' 30
-    juju.wait(_helpers.is_unit_ready('prometheus-k8s'), error=jubilant.any_error)
-    _helpers.wait_for_controller_target(juju, expected=True)
+    juju.remove_relation("prometheus-k8s", "controller")
+    _helpers.wait_for_controller_target(juju, "prometheus-k8s", 0, present=False)
+    _helpers.wait_controller_active(controller)
+    _helpers.wait_app_active(juju, "prometheus-k8s")
 
-    # ---- Remove the cross-model relation. Equivalent to:
-    #     juju remove-relation prometheus-k8s controller
-    juju.remove_relation('prometheus-k8s', CONSUMER_ALIAS)
-
-    # ---- Wait until Prometheus no longer scrapes the controller, and
-    # check both apps are still active. Equivalent to:
-    #     retry 'check_prometheus_no_target prometheus-k8s 0' 30
-    #     juju status -m controller --format json | yq -r \
-    #         "$(active_condition "controller")" | check "controller"
-    #     juju status --format json | yq -r \
-    #         "$(active_condition "prometheus-k8s")" | check "prometheus-k8s"
-    _helpers.wait_for_controller_target(juju, expected=False)
-    controller.wait(
-        lambda s: jubilant.all_active(s, 'controller'),
-        error=jubilant.any_error,
-    )
-    juju.wait(
-        lambda s: jubilant.all_active(s, 'prometheus-k8s'),
-        error=jubilant.any_error,
-    )
-
-    # ---- Remove prometheus-k8s with destroy-storage, no-wait, force.
-    # Equivalent to:
-    #     juju remove-application prometheus-k8s --destroy-storage \
-    #         --no-prompt --force --no-wait
-    # Juju.remove_application covers --destroy-storage/--no-prompt/--force
-    # but not --no-wait, so we drop into Juju.cli for full parity with
-    # the bash flags.
-    juju.cli(
-        'remove-application',
-        'prometheus-k8s',
-        '--destroy-storage',
-        '--no-prompt',
-        '--force',
-        '--no-wait',
-    )
-
-    # The cross-controller offer/consume/alias and the remaining SAAS
-    # relation are cleaned up by pytest-jubilant's teardown, same as the
-    # temp models in test_prometheus.py / test_prometheus_multi.py.
+    _helpers.remove_application_no_wait(juju, "prometheus-k8s")

@@ -46,3 +46,6 @@ charmcraft fetch-libs
 ## Running Tests
 
 - `./run_tests`
+- Integration tests need an already-bootstrapped controller running this charm:
+  `uv run --group integration pytest tests/integration -v --juju-controller=<controller>`
+  (see CONTRIBUTING.md).

@@ -194,25 +194,29 @@ dev = [
     { name = "coverage" },
     { name = "ruff" },
 ]
+
+[package.dev-dependencies]
 integration = [
     { name = "jubilant" },
     { name = "pytest" },
     { name = "pytest-jubilant" },
-    { name = "pyyaml" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "cosl" },
     { name = "coverage", marker = "extra == 'dev'" },
-    { name = "jubilant", marker = "extra == 'integration'" },
     { name = "ops" },
-    { name = "pytest", marker = "extra == 'integration'" },
-    { name = "pytest-jubilant", marker = "extra == 'integration'" },
-    { name = "pyyaml", marker = "extra == 'integration'" },
     { name = "ruff", marker = "extra == 'dev'" },
 ]
-provides-extras = ["dev", "integration"]
+provides-extras = ["dev"]
+
+[package.metadata.requires-dev]
+integration = [
+    { name = "jubilant", specifier = ">=1.12" },
+    { name = "pytest" },
+    { name = "pytest-jubilant", specifier = ">=2.2" },
+]
 
 [[package]]
 name = "opentelemetry-api"

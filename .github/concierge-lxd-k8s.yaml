@@ -1,0 +1,28 @@
+# Concierge config for the cross-controller integration test job.
+#
+# Like upstream juju/juju's controllercharm `run_prometheus_cross_controller`,
+# the controller under test is on LXD, and prometheus-k8s runs on a second
+# controller on Canonical K8s. Concierge installs Juju, LXD and Canonical K8s,
+# but doesn't bootstrap: the CI workflow bootstraps both controllers itself
+# (see the `Bootstrap on ...` steps in .github/workflows/ci.yml), because it
+# needs the per-job --bootstrap-base and --controller-charm-path. With
+# `bootstrap: false`, concierge ignores `model-defaults`,
+# `bootstrap-constraints` and `extra-bootstrap-args`.
+juju:
+  # charmcraft.yaml declares `assumes: juju >= 4.2`.
+  channel: 4.2/edge
+
+providers:
+  lxd:
+    enable: true
+    bootstrap: false
+  k8s:
+    enable: true
+    bootstrap: false
+    # The features of concierge's built-in `k8s` preset.
+    features:
+      load-balancer:
+        l2-mode: "true"
+        cidrs: "10.43.45.0/28"
+      local-storage: {}
+      network: {}
