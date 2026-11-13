@@ -159,8 +159,14 @@ jobs:
         run: |
           set -euo pipefail
           CHANNEL=$(yq '.juju.channel' .github/concierge-lxd.yaml)
-          VERSION=$(snap info juju \
-            | awk -v ch="$CHANNEL:" '$1 == ch {print $2}')
+          # The store query fails now and then ("no snap found"): retry.
+          VERSION=
+          for attempt in 1 2 3 4 5; do
+            VERSION=$(snap info juju \
+              | awk -v ch="$CHANNEL:" '$1 == ch {print $2}') && break
+            echo "snap info juju failed (attempt $attempt); retrying"
+            sleep 10
+          done
           SHORT_SHA="${VERSION##*-}"
           if [[ ! "$SHORT_SHA" =~ ^[0-9a-f]{7,40}$ ]]; then
             echo "::error::No commit in juju $CHANNEL version '$VERSION'"
