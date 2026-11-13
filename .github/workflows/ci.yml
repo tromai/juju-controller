@@ -263,8 +263,12 @@ jobs:
       - name: Build the operator image
         # OPERATOR_IMAGE_BUILD_SRC=false: use the payload staged above,
         # instead of building the snap again. Without a push, the image is
-        # loaded into the local Docker image store.
-        run: make operator-image OPERATOR_IMAGE_BUILD_SRC=false
+        # loaded into the local Docker image store. The Makefile prefers
+        # podman when it's installed (as on the runners), which builds a
+        # manifest list that `docker image ls` can't see, so ask for Docker.
+        run: |
+          make operator-image OPERATOR_IMAGE_BUILD_SRC=false \
+            OCI_BUILDER=docker
 
       - name: Save the image
         id: image
