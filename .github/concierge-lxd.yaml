@@ -1,0 +1,16 @@
+# Concierge config for the LXD integration test jobs.
+#
+# Concierge installs Juju and LXD, but doesn't bootstrap: the CI workflow runs
+# `juju bootstrap` itself (see `Bootstrap on LXD` in .github/workflows/ci.yml),
+# because it needs per-job arguments (--bootstrap-base and
+# --controller-charm-path). Note that with `bootstrap: false`, concierge
+# ignores `model-defaults`, `bootstrap-constraints` and `extra-bootstrap-args`,
+# so any such arguments belong on the `juju bootstrap` command line instead.
+juju:
+  # charmcraft.yaml declares `assumes: juju >= 4.2`.
+  channel: 4.2/edge
+
+providers:
+  lxd:
+    enable: true
+    bootstrap: false
