@@ -625,6 +625,23 @@ jobs:
             --juju-controller=${{ matrix.cloud }} \
             ${K8S_CONTROLLER:+--k8s-controller="$K8S_CONTROLLER"}
 
+      - name: Collect Kubernetes controller diagnostics
+        if: failure()
+        # Why the Kubernetes controller pod didn't serve its API: pod state,
+        # events and container logs (including those of restarted containers).
+        run: |
+          set +e
+          NS="controller-${{ matrix.k8s_controller }}"
+          kubectl() { sudo k8s kubectl "$@"; }
+          kubectl get pods --all-namespaces -o wide
+          kubectl -n "$NS" get all
+          kubectl -n "$NS" get events --sort-by=.lastTimestamp
+          kubectl -n "$NS" describe pod controller-0
+          kubectl -n "$NS" logs controller-0 --all-containers --prefix \
+            --tail=300
+          kubectl -n "$NS" logs controller-0 --all-containers --prefix \
+            --previous --tail=300
+
       - name: Upload integration test logs
         if: ${{ !cancelled() }}
         # v7.0.1
@@ -763,6 +780,30 @@ jobs:
             --log-file-level=DEBUG \
             --juju-dump-logs=logs/juju-debug-log \
             --juju-controller=${{ matrix.cloud }}
+
+      - name: Collect Kubernetes controller diagnostics
+        if: failure()
+        # Why the controller pod didn't serve its API: pod state, events and
+        # container logs (including those of restarted containers).
+        run: |
+          set +e
+          NS="controller-${{ matrix.cloud }}"
+          kubectl() {
+            if [[ "${{ matrix.cloud }}" == microk8s ]]; then
+              # Strictly confined, so `sg` as for the bootstrap.
+              sg snap_microk8s -c "microk8s kubectl $*"
+            else
+              sudo k8s kubectl "$@"
+            fi
+          }
+          kubectl get pods --all-namespaces -o wide
+          kubectl -n "$NS" get all
+          kubectl -n "$NS" get events --sort-by=.lastTimestamp
+          kubectl -n "$NS" describe pod controller-0
+          kubectl -n "$NS" logs controller-0 --all-containers --prefix \
+            --tail=300
+          kubectl -n "$NS" logs controller-0 --all-containers --prefix \
+            --previous --tail=300
 
       - name: Upload integration test logs
         if: ${{ !cancelled() }}
