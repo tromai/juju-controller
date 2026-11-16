@@ -78,19 +78,18 @@ jobs:
       # NOTE: the build job checks out TEST_REF -- an arbitrary branch (or even
       # a fork) selected via the workflow_dispatch `ref` input, which may not
       # contain this repo's .github/concierge-*.yaml files. So provisioning
-      # here must NOT depend on any repo file. We deliberately use concierge's
-      # built-in `crafts` preset (shipped inside the concierge snap) rather
-      # than a `-c <config>` file for that reason. The `crafts` preset installs
-      # LXD (charmcraft's build backend), charmcraft, snapcraft and rockcraft,
-      # and disables Juju -- exactly what `charmcraft pack` needs.
-      - name: Install concierge
-        run: sudo snap install --classic concierge
+      # here must NOT depend on any repo file.
+      - name: Set up LXD
+        # LXD is charmcraft's build backend.
+        # 1.0.0
+        uses: canonical/setup-lxd@8c6a87bfb56aa48f3fb9b830baa18562d8bfd4ee
 
-      - name: Prepare with concierge
+      - name: Add runner to lxd group
+        run: sudo usermod -a -G lxd "$USER"
+
+      - name: Install charmcraft
         # We use latest because there's no 4.x track of charmcraft yet.
-        run: |
-          sudo concierge prepare -v -p crafts \
-            --charmcraft-channel latest/stable
+        run: sudo snap install charmcraft --classic --channel=latest/stable
 
       - name: Pack charm
         # Wrapped in `sg lxd` so the freshly-added lxd group membership is
