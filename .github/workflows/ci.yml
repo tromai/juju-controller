@@ -220,6 +220,16 @@ jobs:
     # into each job's local cluster (containerd), which then doesn't need to
     # pull it, as the pod's imagePullPolicy is IfNotPresent.
     #
+    # The `juju` client snap on 4.2/edge is built to pull its images from
+    # juju's testing registry, whose 4.2-beta1 image is older than the client
+    # and doesn't work with it. So the Kubernetes jobs bootstrap with
+    # `caas-image-repo=ghcr.io/juju`, for which the client then expects our
+    # image's name (Juju doesn't contact ghcr.io for a public repo), and
+    # charm-base images are pulled from ghcr.io as usual. 4.2-beta1 isn't on
+    # ghcr.io, so if our image were missing, the pull would fail, rather than
+    # silently fetch another image. `.github/scripts/check-controller-image.sh`
+    # checks that the controller pod runs our image.
+    #
     # This job can be dropped once a matching image is published.
     needs: [controller-snap]
     runs-on: ubuntu-latest
@@ -598,12 +608,22 @@ jobs:
       - name: Bootstrap Prometheus controller on Canonical K8s
         # --keep-broken keeps the controller namespace if bootstrap fails, so
         # that `Collect Kubernetes controller diagnostics` can inspect the pod.
+        # caas-image-repo: see the `controller-image` job.
         run: |
           juju bootstrap k8s "${{ matrix.k8s_controller }}" --debug \
             --keep-broken \
             --config bootstrap-timeout=1800 \
+            --config caas-image-repo=ghcr.io/juju \
             --bootstrap-constraints root-disk=2G \
             --controller-charm-path=${{ steps.charm.outputs.path }}
+
+      - name: Check the Prometheus controller runs the imported image
+        env:
+          KUBECTL: sudo k8s kubectl
+        run: |
+          .github/scripts/check-controller-image.sh \
+            "controller-${{ matrix.k8s_controller }}" \
+            controller-image/jujud-operator.tar
 
       - name: Install uv
         # v10.0.1
@@ -791,22 +811,38 @@ jobs:
         # Controller pods can take a while to expose their API on busy runners,
         # hence the longer bootstrap timeout. --keep-broken keeps the
         # controller namespace if bootstrap fails, so that `Collect Kubernetes
-        # controller diagnostics` can inspect the pod.
+        # controller diagnostics` can inspect the pod. caas-image-repo: see
+        # the `controller-image` job.
         run: |
           sg snap_microk8s -c "juju bootstrap microk8s microk8s --debug \
             --keep-broken \
             --config bootstrap-timeout=1800 \
+            --config caas-image-repo=ghcr.io/juju \
             --controller-charm-path=${{ steps.charm.outputs.path }}"
 
       - name: Bootstrap on Canonical K8s
         if: matrix.cloud == 'k8s'
-        # --keep-broken: see `Bootstrap on MicroK8s`.
+        # --keep-broken, caas-image-repo: see `Bootstrap on MicroK8s`.
         run: |
           juju bootstrap k8s k8s --debug \
             --keep-broken \
             --config bootstrap-timeout=1800 \
+            --config caas-image-repo=ghcr.io/juju \
             --bootstrap-constraints root-disk=2G \
             --controller-charm-path=${{ steps.charm.outputs.path }}
+
+      - name: Check the controller runs the imported image
+        # `sg` as for the bootstrap on MicroK8s.
+        run: |
+          CHECK=(.github/scripts/check-controller-image.sh
+            "controller-${{ matrix.cloud }}"
+            controller-image/jujud-operator.tar)
+          if [[ "${{ matrix.cloud }}" == microk8s ]]; then
+            sg snap_microk8s -c \
+              "KUBECTL='microk8s kubectl' $(printf '%q ' "${CHECK[@]}")"
+          else
+            KUBECTL="sudo k8s kubectl" "${CHECK[@]}"
+          fi
 
       - name: Install uv
         # v10.0.1
