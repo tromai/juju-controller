@@ -34,6 +34,33 @@ $ ruff format --preview src/ tests/
 
 We run format after check to make sure all fixes from ruff are re-formatted correctly.
 
+## Integration tests
+
+The integration tests in `tests/integration/` use
+[Jubilant](https://github.com/canonical/jubilant) and
+[pytest-jubilant](https://github.com/canonical/pytest-jubilant). They don't
+bootstrap a controller, so first bootstrap one with your packed charm (see
+[Deploying](#deploying)), then run:
+
+```console
+$ uv run --group integration pytest tests/integration -v --log-cli-level=INFO \
+    --juju-controller=<controller>
+```
+
+`--juju-controller` selects the controller under test (default: the current
+controller). Temporary models are created on it, and destroyed afterwards
+unless you pass `--no-juju-teardown`.
+
+The Prometheus tests are ports of juju/juju's
+[`controllercharm`](https://github.com/juju/juju/tree/main/tests/suites/controllercharm)
+suite, and need `prometheus-k8s`, which only runs on Kubernetes:
+
+- `test_prometheus.py` and `test_prometheus_multi.py` only run if the
+  controller under test is on a Kubernetes cloud.
+- `test_prometheus_cmr.py` only runs if you pass
+  `--k8s-controller=<controller>`, naming a second controller on a Kubernetes
+  cloud to deploy Prometheus on.
+
 ## Deploying
 
 Before you deploy your modified controller charm, you will need to pack it using Charmcraft:

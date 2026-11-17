@@ -1,0 +1,24 @@
+# Concierge config for the Canonical K8s integration test job.
+#
+# Concierge installs Juju and Canonical K8s, but doesn't bootstrap: the CI
+# workflow runs `juju bootstrap` itself (see `Bootstrap on Canonical K8s` in
+# .github/workflows/ci.yml), because it needs the per-job
+# --controller-charm-path. With `bootstrap: false`, concierge ignores
+# `model-defaults`, `bootstrap-constraints` and `extra-bootstrap-args`.
+#
+# LXD isn't enabled: the charm is packed in the separate build job.
+juju:
+  # charmcraft.yaml declares `assumes: juju >= 4.2`.
+  channel: 4.2/edge
+
+providers:
+  k8s:
+    enable: true
+    bootstrap: false
+    # The features of concierge's built-in `k8s` preset.
+    features:
+      load-balancer:
+        l2-mode: "true"
+        cidrs: "10.43.45.0/28"
+      local-storage: {}
+      network: {}
