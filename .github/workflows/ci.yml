@@ -596,8 +596,11 @@ jobs:
             images ls -q | grep '/jujud-operator:'
 
       - name: Bootstrap Prometheus controller on Canonical K8s
+        # --keep-broken keeps the controller namespace if bootstrap fails, so
+        # that `Collect Kubernetes controller diagnostics` can inspect the pod.
         run: |
-          juju bootstrap k8s "${{ matrix.k8s_controller }}" \
+          juju bootstrap k8s "${{ matrix.k8s_controller }}" --debug \
+            --keep-broken \
             --config bootstrap-timeout=1800 \
             --bootstrap-constraints root-disk=2G \
             --controller-charm-path=${{ steps.charm.outputs.path }}
@@ -642,6 +645,19 @@ jobs:
           kubectl -n "$NS" get all
           kubectl -n "$NS" get events --sort-by=.lastTimestamp
           kubectl -n "$NS" describe pod controller-0
+          # Which image (and digest) each container runs: the imageIDs should
+          # match the digest `ctr images import` printed. `already present on
+          # machine` events mean the imported image was used, `Pulling image`
+          # for jujud-operator means the kubelet tried to fetch it.
+          IMAGES='{range .status.initContainerStatuses[*]}{.name}{"\t"}'
+          IMAGES+='{.image}{"\t"}{.imageID}{"\n"}{end}'
+          IMAGES+='{range .status.containerStatuses[*]}{.name}{"\t"}'
+          IMAGES+='{.image}{"\t"}{.imageID}{"\n"}{end}'
+          kubectl -n "$NS" get pod controller-0 -o jsonpath="$IMAGES"
+          kubectl -n "$NS" get events \
+            --field-selector involvedObject.name=controller-0 \
+            -o custom-columns=REASON:.reason,MESSAGE:.message \
+            | grep -Ei 'pull|present'
           kubectl -n "$NS" logs controller-0 --all-containers --prefix \
             --tail=300
           kubectl -n "$NS" logs controller-0 --all-containers --prefix \
@@ -660,8 +676,9 @@ jobs:
     runs-on: ubuntu-latest
     # The controller is bootstrapped from the charm built by the `build` job
     # (--controller-charm-path), not from Charmhub, and runs from the image
-    # built by the `controller-image` job.
-    needs: [build, controller-image]
+    # built by the `controller-image` job. `controller-snap` is only needed
+    # for its juju-version output (the image is built from the same commit).
+    needs: [build, controller-snap, controller-image]
     env:
       # Fail, rather than silently re-lock, if uv.lock is out of date.
       UV_LOCKED: "1"
@@ -726,6 +743,21 @@ jobs:
           sudo concierge prepare -v \
             -c ".github/concierge-${{ matrix.concierge }}.yaml"
 
+      - name: Check Juju client matches the jujud-operator image
+        # The image was built from the commit of the `juju` client snap seen
+        # by the `controller-snap` job. If the channel moved since then, fail
+        # clearly here rather than at bootstrap; re-running the whole workflow
+        # rebuilds the image.
+        env:
+          EXPECTED: ${{ needs.controller-snap.outputs.juju-version }}
+        run: |
+          INSTALLED=$(snap list juju | awk 'NR == 2 {print $2}')
+          if [[ "$INSTALLED" != "$EXPECTED" ]]; then
+            echo "::error::juju $INSTALLED installed, jujud-operator image" \
+              "built for $EXPECTED; re-run all jobs"
+            exit 1
+          fi
+
       - name: Import jujud-operator image into MicroK8s
         if: matrix.cloud == 'microk8s'
         # Puts the image in the cluster's containerd, so the controller pod
@@ -757,16 +789,21 @@ jobs:
         # The runner user was added to the snap_microk8s group by concierge, but
         # that doesn't apply to this already-running login session, hence `sg`.
         # Controller pods can take a while to expose their API on busy runners,
-        # hence the longer bootstrap timeout.
+        # hence the longer bootstrap timeout. --keep-broken keeps the
+        # controller namespace if bootstrap fails, so that `Collect Kubernetes
+        # controller diagnostics` can inspect the pod.
         run: |
-          sg snap_microk8s -c "juju bootstrap microk8s microk8s \
+          sg snap_microk8s -c "juju bootstrap microk8s microk8s --debug \
+            --keep-broken \
             --config bootstrap-timeout=1800 \
             --controller-charm-path=${{ steps.charm.outputs.path }}"
 
       - name: Bootstrap on Canonical K8s
         if: matrix.cloud == 'k8s'
+        # --keep-broken: see `Bootstrap on MicroK8s`.
         run: |
-          juju bootstrap k8s k8s \
+          juju bootstrap k8s k8s --debug \
+            --keep-broken \
             --config bootstrap-timeout=1800 \
             --bootstrap-constraints root-disk=2G \
             --controller-charm-path=${{ steps.charm.outputs.path }}
@@ -795,8 +832,9 @@ jobs:
           NS="controller-${{ matrix.cloud }}"
           kubectl() {
             if [[ "${{ matrix.cloud }}" == microk8s ]]; then
-              # Strictly confined, so `sg` as for the bootstrap.
-              sg snap_microk8s -c "microk8s kubectl $*"
+              # Strictly confined, so `sg` as for the bootstrap. Arguments
+              # are re-quoted, as `sg -c` takes a single command string.
+              sg snap_microk8s -c "microk8s kubectl $(printf '%q ' "$@")"
             else
               sudo k8s kubectl "$@"
             fi
@@ -805,6 +843,19 @@ jobs:
           kubectl -n "$NS" get all
           kubectl -n "$NS" get events --sort-by=.lastTimestamp
           kubectl -n "$NS" describe pod controller-0
+          # Which image (and digest) each container runs: the imageIDs should
+          # match the digest `ctr images import` printed. `already present on
+          # machine` events mean the imported image was used, `Pulling image`
+          # for jujud-operator means the kubelet tried to fetch it.
+          IMAGES='{range .status.initContainerStatuses[*]}{.name}{"\t"}'
+          IMAGES+='{.image}{"\t"}{.imageID}{"\n"}{end}'
+          IMAGES+='{range .status.containerStatuses[*]}{.name}{"\t"}'
+          IMAGES+='{.image}{"\t"}{.imageID}{"\n"}{end}'
+          kubectl -n "$NS" get pod controller-0 -o jsonpath="$IMAGES"
+          kubectl -n "$NS" get events \
+            --field-selector involvedObject.name=controller-0 \
+            -o custom-columns=REASON:.reason,MESSAGE:.message \
+            | grep -Ei 'pull|present'
           kubectl -n "$NS" logs controller-0 --all-containers --prefix \
             --tail=300
           kubectl -n "$NS" logs controller-0 --all-containers --prefix \
