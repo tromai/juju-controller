@@ -678,6 +678,14 @@ jobs:
             --field-selector involvedObject.name=controller-0 \
             -o custom-columns=REASON:.reason,MESSAGE:.message \
             | grep -Ei 'pull|present'
+          # DNS as seen from the controller pod (it resolves charm channels, for
+          # `juju deploy`), CoreDNS's config and logs, and the host's resolvers.
+          kubectl -n "$NS" exec controller-0 -c charm -- sh -c \
+            'cat /etc/resolv.conf; getent hosts api.charmhub.io'
+          kubectl -n kube-system get configmap coredns -o yaml
+          kubectl -n kube-system logs -l k8s-app=kube-dns --prefix --tail=100
+          cat /etc/resolv.conf
+          resolvectl status
           kubectl -n "$NS" logs controller-0 --all-containers --prefix \
             --tail=300
           kubectl -n "$NS" logs controller-0 --all-containers --prefix \
@@ -892,6 +900,14 @@ jobs:
             --field-selector involvedObject.name=controller-0 \
             -o custom-columns=REASON:.reason,MESSAGE:.message \
             | grep -Ei 'pull|present'
+          # DNS as seen from the controller pod (it resolves charm channels, for
+          # `juju deploy`), CoreDNS's config and logs, and the host's resolvers.
+          kubectl -n "$NS" exec controller-0 -c charm -- sh -c \
+            'cat /etc/resolv.conf; getent hosts api.charmhub.io'
+          kubectl -n kube-system get configmap coredns -o yaml
+          kubectl -n kube-system logs -l k8s-app=kube-dns --prefix --tail=100
+          cat /etc/resolv.conf
+          resolvectl status
           kubectl -n "$NS" logs controller-0 --all-containers --prefix \
             --tail=300
           kubectl -n "$NS" logs controller-0 --all-containers --prefix \

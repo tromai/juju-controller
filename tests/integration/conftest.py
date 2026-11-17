@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import logging
 import secrets
+import string
 from collections.abc import Iterator
 
 import jubilant
@@ -121,7 +122,10 @@ def metrics_offer(
     """
     module_name = request.module.__name__.rpartition(".")[-1]
     suffix = module_name.removeprefix("test_").replace("_", "-")
-    offer_name = f"metrics-{suffix}-{secrets.token_hex(2)}"
+    # Juju rejects an offer name ending in `-<digits>` (it looks like a unit
+    # number), which a bare hex suffix is 15% of the time: start it with a letter.
+    unique = secrets.choice(string.ascii_lowercase) + secrets.token_hex(2)
+    offer_name = f"metrics-{suffix}-{unique}"
 
     controller.offer("controller", endpoint="metrics-endpoint", name=offer_name)
     offer_url = f"{controller_info.controller_name}:{controller_info.name}.{offer_name}"
